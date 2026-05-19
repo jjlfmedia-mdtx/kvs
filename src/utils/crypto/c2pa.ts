@@ -81,7 +81,21 @@ export async function signWithC2PA(
     });
 
     const out = signedAssetResult as any;
-    const outBuffer = out?.signedAsset?.buffer ?? out?.buffer ?? null;
+    
+    // c2pa-node can return the buffer in various shapes depending on the environment and version
+    let outBuffer: Buffer | null = null;
+    
+    if (Buffer.isBuffer(out)) {
+      outBuffer = out;
+    } else if (out && Buffer.isBuffer(out.signedAsset)) {
+      outBuffer = out.signedAsset;
+    } else if (out && out.signedAsset && out.signedAsset.buffer) {
+      outBuffer = Buffer.isBuffer(out.signedAsset.buffer) ? out.signedAsset.buffer : Buffer.from(out.signedAsset.buffer);
+    } else if (out && Buffer.isBuffer(out.buffer)) {
+      outBuffer = out.buffer;
+    } else if (out && out.buffer) {
+      outBuffer = Buffer.from(out.buffer);
+    }
 
     const manifestSummary = JSON.stringify({
       issuer: 'Kyllerium Corporation (Test)',
@@ -91,9 +105,12 @@ export async function signWithC2PA(
       kvs_id: kvsData?.kvs_id
     });
 
-    if (outBuffer) {
-      return { buffer: Buffer.from(outBuffer), injected: true, manifestSummary };
+    if (outBuffer && outBuffer.length > 0) {
+      return { buffer: outBuffer, injected: true, manifestSummary };
     }
+    
+    // If we reached here, it didn't throw, but no buffer was returned.
+    console.warn('[KVS C2PA] c2pa.sign succeeded but returned empty/null buffer. Keys returned:', Object.keys(out || {}));
     return { buffer: imageBuffer, injected: false, manifestSummary };
 
   } catch (err: any) {
