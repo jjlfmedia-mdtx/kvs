@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  --bg-primary: #020813;
+  --bg-secondary: #0A1128;
+  --bg-card: #0D1630;
+  --accent-cyan: #00E5FF;
+  --accent-purple: #9D4EDD;
+  --text-primary: #FFFFFF;
+  --text-secondary: #94A3B8;
+  --glass: rgba(13, 22, 48, 0.4);
+  --glass-border: rgba(0, 229, 255, 0.15);
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  background-image: radial-gradient(circle at 50% 0%, #0A1128 0%, #020813 60%);
+  min-height: 100vh;
+}
+
+.glass-card {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+}
+
+.shadow-cyan-glow {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+}
+
+.shadow-cyan-glow-intense {
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.4);
+}
+
+.text-gradient {
+  background: linear-gradient(to right, var(--accent-cyan), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

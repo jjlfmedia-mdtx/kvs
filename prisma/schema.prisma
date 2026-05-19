@@ -1,0 +1,30 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Image {
+  id                  String    @id @default(cuid())
+  kvs_id              String    @unique
+  kvs_fingerprint     String    @unique
+  hash_sha256         String
+  phash               String   
+  filename            String
+  filepath            String
+  upload_date         DateTime  @default(now())
+  verification_status String    @default("VERIFIED")
+  watermark_data      String    @db.Text
+  metadata_json       String    @db.Text
+  c2pa_manifest       String?   @db.Text
+  certificate_data    String?   @db.Text
+  custom_certificate  String?   @db.Text
+  owner_name          String?
+  owner_org           String?
+  owner_role          String?
+  revoked             Boolean   @default(false)
+  revoked_at          DateTime?
+}
