@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function run() { const img = await prisma.image.findFirst({ orderBy: { id: 'desc' } }); console.log(img.c2pa_manifest); } run().finally(() => prisma.$disconnect());
