@@ -74,7 +74,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const pHash = await computePHash(buffer as any);
 
     // 3. Save dynamically (Supabase or Disk)
-    const newFilepath = await saveImageFile(buffer, record.filename, type);
+    // We generate a new filename so we don't try to overwrite the existing file,
+    // which avoids Supabase RLS UPDATE blocks and CDN caching staleness.
+    const ext = record.filename.split('.').pop() || 'png';
+    const baseName = record.filename.replace(`.${ext}`, '');
+    const newFilename = `${baseName}-custom-${Date.now()}.${ext}`;
+    
+    const newFilepath = await saveImageFile(buffer, newFilename, type);
 
     // 4. Update DB
     await prisma.image.update({
