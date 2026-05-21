@@ -3,8 +3,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateCertificate } from '@/utils/crypto/certificate';
 import { readImageFile, saveImageFile } from '@/utils/storage';
-import { embedDCT } from '@/utils/image/dct';
-import { embedLSB } from '@/utils/image/lsb';
+import { embedWatermarkLayers } from '@/utils/image/watermark';
 import { embedMetadata } from '@/utils/image/metadata';
 import { computePHash } from '@/utils/image/phash';
 import { signWithC2PA } from '@/utils/crypto/c2pa';
@@ -58,12 +57,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     let buffer = await readImageFile(record.filepath);
     const type = JSON.parse(record.metadata_json).type || 'image/jpeg';
     
-    const dctPayload = { kvs_id: id, owner: name };
-    buffer = await embedDCT(buffer as any, dctPayload) as any;
-    
-    if (type !== 'image/jpeg') {
-      buffer = await embedLSB(buffer as any, dctPayload) as any;
-    }
+    const watermarkResult = await embedWatermarkLayers(
+      buffer,
+      { kvs_id: id, owner: name },
+      { kvs_id: id, owner: name, organization, role, ts: Date.now() }
+    );
+    buffer = watermarkResult.buffer;
     
     buffer = await embedMetadata(buffer as any, { kvsId: id, ownerName: name, organization, role, year: new Date().getFullYear() }, type.split('/')[1]) as any;
     const c2paRes = await signWithC2PA(buffer as any, type, { kvs_id: id }, { name, organization, role, expirationDate, usageDescription });

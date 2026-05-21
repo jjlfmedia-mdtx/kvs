@@ -21,9 +21,22 @@ export async function embedLSB(imageBuffer: Buffer, payload: any): Promise<Buffe
       raw[i] = (raw[i] & 0xFE) | parseInt(fullBits[i], 10);
     }
 
-    return await sharp(raw, {
+    const fmt = metadata.format as string;
+    let output = sharp(raw, {
       raw: { width: metadata.width!, height: metadata.height!, channels: 3 }
-    }).toFormat(metadata.format as any).toBuffer();
+    });
+
+    if (fmt === 'jpeg' || fmt === 'jpg') {
+      output = output.jpeg({ quality: 100, chromaSubsampling: '4:4:4' });
+    } else if (fmt === 'webp') {
+      output = output.webp({ quality: 100, lossless: true });
+    } else if (fmt === 'png') {
+      output = output.png({ compressionLevel: 6 });
+    } else {
+      output = output.toFormat(fmt as any, { quality: 100 });
+    }
+
+    return await output.toBuffer();
   } catch (err: any) {
     console.warn('[KVS LSB] Embedding skipped:', err?.message);
     return imageBuffer;

@@ -1,15 +1,13 @@
 // src/app/api/upload/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { embedDCT } from '@/utils/image/dct';
-import { embedLSB } from '@/utils/image/lsb';
+import { embedWatermarkLayers } from '@/utils/image/watermark';
 import { computePHash } from '@/utils/image/phash';
 import { embedMetadata } from '@/utils/image/metadata';
 import { signWithC2PA } from '@/utils/crypto/c2pa';
 import { computeSHA256 } from '@/utils/crypto/hash';
 import sanitize from 'sanitize-filename';
 import path from 'path';
-import fs from 'fs/promises';
 import crypto from 'crypto';
 import { saveImageFile } from '@/utils/storage';
 function getMimeType(buffer: Buffer): { mime: string; ext: string } | null {
@@ -65,17 +63,23 @@ export async function POST(req: Request) {
 
     let processedBuffer: Buffer = buffer;
 
-    // ── Layer 1: DCT watermark (spread-spectrum, survives light compression) ──
+    // ── Layers 1 & 2: DCT + LSB in one raw-image pass ──
+    // This keeps the same protection layers while avoiding repeated re-encoding,
+    // which was the main cause of visible quality loss.
     try {
-      processedBuffer = await embedDCT(processedBuffer as any, { kvs_id: kvsId, owner: ownerName }) as any;
-      layers.dct = true;
-    } catch (e: any) { console.warn('[DCT]', e?.message); layers.dct = false; }
-
-    // ── Layer 2: LSB steganography (ALL formats — precise bit-level embed) ──
-    try {
-      processedBuffer = await embedLSB(processedBuffer as any, { kvs_id: kvsId, owner: ownerName, ts: Date.now() }) as any;
-      layers.lsb = true;
-    } catch (e: any) { console.warn('[LSB]', e?.message); layers.lsb = false; }
+      const watermarkResult = await embedWatermarkLayers(
+        processedBuffer,
+        { kvs_id: kvsId, owner: ownerName },
+        { kvs_id: kvsId, owner: ownerName, ts: Date.now() }
+      );
+      processedBuffer = watermarkResult.buffer;
+      layers.dct = watermarkResult.layers.dct;
+      layers.lsb = watermarkResult.layers.lsb;
+    } catch (e: any) {
+      console.warn('[Watermark]', e?.message);
+      layers.dct = false;
+      layers.lsb = false;
+    }
 
     // ── Layer 3: EXIF/XMP metadata (JPEG), LSB fallback for PNG/WEBP ──────
     try {

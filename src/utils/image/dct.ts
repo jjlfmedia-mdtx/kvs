@@ -128,9 +128,20 @@ export async function embedDCT(imageBuffer: Buffer, payload: { kvs_id: string; o
       }
     }
 
-    return await sharp(raw, {
-      raw: { width, height, channels: 3 }
-    }).toFormat(metadata.format as any).toBuffer();
+    const fmt = metadata.format as string;
+    let output = sharp(raw, { raw: { width, height, channels: 3 } });
+
+    if (fmt === 'jpeg' || fmt === 'jpg') {
+      output = output.jpeg({ quality: 100, chromaSubsampling: '4:4:4' });
+    } else if (fmt === 'webp') {
+      output = output.webp({ quality: 100, lossless: true });
+    } else if (fmt === 'png') {
+      output = output.png({ compressionLevel: 6 }); // PNG is always lossless
+    } else {
+      output = output.toFormat(fmt as any, { quality: 100 });
+    }
+
+    return await output.toBuffer();
   } catch (err: any) {
     console.warn('[KVS DCT] Embedding failed:', err?.message);
     return imageBuffer;
