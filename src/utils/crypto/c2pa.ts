@@ -1,10 +1,42 @@
 // src/utils/crypto/c2pa.ts
-// Uses createTestSigner which embeds a real COSE-signed manifest readable by
-// verify.contentauthenticity.org (shows as "Test" issuer but is structurally valid C2PA)
-import { createC2pa, createTestSigner, ManifestBuilder } from 'c2pa-node';
-import fs from 'fs';
+import { createC2pa, ManifestBuilder, SigningAlgorithm, type LocalSigner } from 'c2pa-node';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
 import path from 'path';
 
+function resolveSignerPaths() {
+  const certificatePath = process.env.KVS_C2PA_CERT_PATH
+    ? path.resolve(process.cwd(), process.env.KVS_C2PA_CERT_PATH)
+    : path.resolve(process.cwd(), 'certs', 'cert.pem');
+
+  const privateKeyPath = process.env.KVS_C2PA_PRIVATE_KEY_PATH
+    ? path.resolve(process.cwd(), process.env.KVS_C2PA_PRIVATE_KEY_PATH)
+    : path.resolve(process.cwd(), 'certs', 'private.pem');
+
+  if (existsSync(certificatePath) && existsSync(privateKeyPath)) {
+    return { certificatePath, privateKeyPath, issuer: 'Kyllerium Corporation' };
+  }
+
+  throw new Error('Missing C2PA certificate or private key. Configure KVS_C2PA_CERT_PATH/KVS_C2PA_PRIVATE_KEY_PATH or add certs/cert.pem and certs/private.pem.');
+}
+
+async function createLocalSigner(): Promise<{ signer: LocalSigner; issuer: string }> {
+  const signerPaths = resolveSignerPaths();
+  const [certificate, privateKey] = await Promise.all([
+    readFile(signerPaths.certificatePath),
+    readFile(signerPaths.privateKeyPath),
+  ]);
+
+  return {
+    signer: {
+      type: 'local',
+      certificate,
+      privateKey,
+      algorithm: SigningAlgorithm.ES256,
+    },
+    issuer: signerPaths.issuer,
+  };
+}
 
 export async function signWithC2PA(
   imageBuffer: Buffer,
@@ -16,11 +48,7 @@ export async function signWithC2PA(
     // thumbnail: false prevents the "cannot read 'thumbnail' of undefined" crash
     const c2pa = createC2pa({ thumbnail: false });
 
-
-
-    // createTestSigner uses c2pa-node's built-in ES256 test certificate chain
-    // which is structurally valid C2PA and readable by verify.contentauthenticity.org
-    const signer = await createTestSigner();
+    const { signer, issuer } = await createLocalSigner();
 
     const ownerName = ownerData?.name || 'Kyllerium User';
     const organization = ownerData?.organization || 'Kyllerium Corporation';
@@ -98,7 +126,7 @@ export async function signWithC2PA(
     }
 
     const manifestSummary = JSON.stringify({
-      issuer: 'Kyllerium Corporation (Test)',
+      issuer,
       algorithm: 'COSE/SHA-256',
       layers: ['DCT', 'LSB', 'EXIF', 'C2PA'],
       signed_at: new Date().toISOString(),
