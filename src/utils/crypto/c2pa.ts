@@ -1,5 +1,5 @@
 // src/utils/crypto/c2pa.ts
-import { createC2pa, ManifestBuilder, SigningAlgorithm, type LocalSigner } from 'c2pa-node';
+import { createC2pa, createTestSigner, ManifestBuilder, SigningAlgorithm, type LocalSigner, type Signer } from 'c2pa-node';
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import path from 'path';
@@ -17,11 +17,14 @@ function resolveSignerPaths() {
     return { certificatePath, privateKeyPath, issuer: 'Kyllerium Corporation' };
   }
 
-  throw new Error('Missing C2PA certificate or private key. Configure KVS_C2PA_CERT_PATH/KVS_C2PA_PRIVATE_KEY_PATH or add certs/cert.pem and certs/private.pem.');
+  return null;
 }
 
 async function createLocalSigner(): Promise<{ signer: LocalSigner; issuer: string }> {
   const signerPaths = resolveSignerPaths();
+  if (!signerPaths) {
+    throw new Error('Missing C2PA certificate or private key');
+  }
   const [certificate, privateKey] = await Promise.all([
     readFile(signerPaths.certificatePath),
     readFile(signerPaths.privateKeyPath),
@@ -38,6 +41,16 @@ async function createLocalSigner(): Promise<{ signer: LocalSigner; issuer: strin
   };
 }
 
+async function resolveSignerWithFallback(): Promise<{ signer: Signer; issuer: string }> {
+  try {
+    return await createLocalSigner();
+  } catch (localErr: any) {
+    console.warn('[KVS C2PA] Local signer unavailable, using test signer fallback:', localErr?.message ?? String(localErr));
+    const signer = await createTestSigner();
+    return { signer, issuer: 'Kyllerium Corporation (Test)' };
+  }
+}
+
 export async function signWithC2PA(
   imageBuffer: Buffer,
   mimeType: string,
@@ -48,7 +61,7 @@ export async function signWithC2PA(
     // thumbnail: false prevents the "cannot read 'thumbnail' of undefined" crash
     const c2pa = createC2pa({ thumbnail: false });
 
-    const { signer, issuer } = await createLocalSigner();
+    const { signer, issuer } = await resolveSignerWithFallback();
 
     const ownerName = ownerData?.name || 'Kyllerium User';
     const organization = ownerData?.organization || 'Kyllerium Corporation';
