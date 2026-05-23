@@ -47,7 +47,13 @@ function applyIDCT8x8(dct: Float64Array): Float64Array {
   return block;
 }
 
-function embedDCTInRaw(raw: Buffer, width: number, height: number, kvsId: string): boolean {
+function embedDCTInRaw(
+  raw: Buffer,
+  width: number,
+  height: number,
+  kvsId: string,
+  maxPixelDelta: number
+): boolean {
   const standardText = `KVS:${kvsId}`;
   const payloadBits = standardText.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join('');
   const blockWidths = Math.floor(width / N);
@@ -88,7 +94,10 @@ function embedDCTInRaw(raw: Buffer, width: number, height: number, kvsId: string
           const pixelIdx = ((by * N + y) * width + (bx * N + x)) * 3;
           const originalY = block[y * N + x];
           const newY = idct[y * N + x];
-          const diff = Math.round(newY - originalY);
+          const diff = Math.max(
+            -maxPixelDelta,
+            Math.min(maxPixelDelta, Math.round(newY - originalY))
+          );
 
           raw[pixelIdx] = Math.max(0, Math.min(255, raw[pixelIdx] + diff));
           raw[pixelIdx + 1] = Math.max(0, Math.min(255, raw[pixelIdx + 1] + diff));
@@ -154,7 +163,9 @@ export async function embedWatermarkLayers(
     .raw()
     .toBuffer();
 
-  const dct = embedDCTInRaw(raw, metadata.width, metadata.height, dctPayload.kvs_id);
+  const isJpeg = metadata.format === 'jpeg' || metadata.format === 'jpg';
+  const maxPixelDelta = isJpeg ? 2 : 4;
+  const dct = embedDCTInRaw(raw, metadata.width, metadata.height, dctPayload.kvs_id, maxPixelDelta);
   const lsb = embedLSBInRaw(raw, lsbPayload);
   const buffer = await encodeRaw(raw, metadata.width, metadata.height, metadata.format);
 

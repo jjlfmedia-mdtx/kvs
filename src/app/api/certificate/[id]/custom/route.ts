@@ -53,35 +53,39 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const record = await prisma.image.findUnique({ where: { kvs_id: id } });
     if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // 1. Re-process image
+    // Re-process image with custom owner data for stronger provenance binding.
     let buffer = await readImageFile(record.filepath);
-    const type = JSON.parse(record.metadata_json).type || 'image/jpeg';
-    
+    const type = JSON.parse(record.metadata_json || '{}').type || 'image/jpeg';
+
     const watermarkResult = await embedWatermarkLayers(
       buffer,
       { kvs_id: id, owner: name },
       { kvs_id: id, owner: name, organization, role, ts: Date.now() }
     );
     buffer = watermarkResult.buffer;
-    
-    buffer = await embedMetadata(buffer as any, { kvsId: id, ownerName: name, organization, role, year: new Date().getFullYear() }, type.split('/')[1]) as any;
-    const c2paRes = await signWithC2PA(buffer as any, type, { kvs_id: id }, { name, organization, role, expirationDate, usageDescription });
+
+    buffer = await embedMetadata(
+      buffer as any,
+      { kvsId: id, ownerName: name, organization, role, year: new Date().getFullYear() },
+      type.split('/')[1]
+    ) as any;
+
+    const c2paRes = await signWithC2PA(
+      buffer as any,
+      type,
+      { kvs_id: id },
+      { name, organization, role, expirationDate, usageDescription }
+    );
     buffer = c2paRes.buffer as any;
 
-    // 2. Recalculate hash and pHash
     const finalHash = computeSHA256(buffer as any);
     const pHash = await computePHash(buffer as any);
 
-    // 3. Save dynamically (Supabase or Disk)
-    // We generate a new filename so we don't try to overwrite the existing file,
-    // which avoids Supabase RLS UPDATE blocks and CDN caching staleness.
     const ext = record.filename.split('.').pop() || 'png';
     const baseName = record.filename.replace(`.${ext}`, '');
     const newFilename = `${baseName}-custom-${Date.now()}.${ext}`;
-    
     const newFilepath = await saveImageFile(buffer, newFilename, type);
 
-    // 4. Update DB
     await prisma.image.update({
       where: { kvs_id: id },
       data: {

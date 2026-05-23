@@ -46,3 +46,39 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+.matrix-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: center;
+  gap: 0.2rem;
+  padding: 1.2rem;
+  overflow: hidden;
+}
+
+.matrix-line {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  color: rgba(0, 229, 255, 0.45);
+  white-space: nowrap;
+  animation: matrixSlide 4.8s linear infinite;
+  text-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
+}
+
+@keyframes matrixSlide {
+  0% {
+    transform: translateX(-12%);
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(12%);
+    opacity: 0;
+  }
+}

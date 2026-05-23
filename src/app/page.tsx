@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, CheckCircle, ShieldCheck, Download, FileText, Loader2, Sparkles, X, Info } from 'lucide-react';
@@ -29,6 +29,12 @@ export default function Home() {
   const [customSaved, setCustomSaved] = useState(false);
   const [savingCustom, setSavingCustom] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
+  const matrixRows = useMemo(() => {
+    const chars = '0123456789ABCDEF{}[]()<>+-/*=KVS';
+    const makeRow = () =>
+      Array.from({ length: 52 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return Array.from({ length: 16 }, (_, i) => ({ id: i, text: makeRow() }));
+  }, []);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const selected = acceptedFiles[0];
@@ -214,7 +220,17 @@ export default function Home() {
 
         {/* ─── UPLOADING ─── */}
         {status === 'uploading' && (
-          <motion.div key="loading" className="w-full max-w-md text-center py-24 relative z-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div key="loading" className="w-full max-w-3xl text-center py-24 relative z-10 overflow-hidden rounded-3xl border border-[var(--glass-border)] glass-card" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="absolute inset-0 pointer-events-none opacity-35">
+              <div className="matrix-grid">
+                {matrixRows.map((row) => (
+                  <p key={row.id} className="matrix-line" style={{ animationDelay: `${row.id * 0.12}s` }}>
+                    {row.text}
+                  </p>
+                ))}
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/50 to-black/80" />
+            </div>
             <div className="relative w-28 h-28 mx-auto mb-8">
               <div className="absolute inset-0 rounded-full border-t-2 border-l-2 border-[var(--accent-cyan)] animate-spin" />
               <div className="absolute inset-3 rounded-full border-r-2 border-b-2 border-[var(--accent-purple)] animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.8s' }} />
@@ -371,7 +387,7 @@ export default function Home() {
                         <button onClick={saveCustomCertificate} disabled={savingCustom || !customData.name} className="flex items-center gap-2 px-6 py-3 bg-[var(--accent-cyan)] text-black font-mono font-bold rounded-2xl hover:shadow-cyan-glow transition disabled:opacity-50 text-sm">
                           <span className="flex items-center gap-2">
                             {savingCustom ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                            <span>{savingCustom ? 'GUARDANDO...' : 'GUARDAR'}</span>
+                            <span>{savingCustom ? 'IMPLEMENTANDO...' : 'GUARDAR'}</span>
                           </span>
                         </button>
                         <button onClick={downloadAllPDFs} disabled={!customSaved} className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition disabled:opacity-40 text-sm font-bold">
