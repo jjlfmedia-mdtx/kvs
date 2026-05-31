@@ -1,215 +1,207 @@
-// src/utils/crypto/certificate.ts
+// src/utils/crypto/certificate.ts  — KylLerium Visual Signature Engine v3.0
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 
-/** Helper function to draw a single certificate page on the PDFDocument */
+/** Helper – draw a horizontal colour bar (simulated gradient via strips) */
+function drawGradientBar(doc: any, x: number, y: number, w: number, h: number) {
+  const steps = 60;
+  const stepW = w / steps;
+  for (let i = 0; i < steps; i++) {
+    const t = i / steps;
+    const r = Math.round(0 + t * 157);
+    const g = Math.round(229 - t * 154);
+    const b = Math.round(255 - t * 34);
+    doc.rect(x + i * stepW, y, stepW + 0.5, h).fill(`rgb(${r},${g},${b})`);
+  }
+}
+
+/** Draw a single premium certificate page */
 async function drawCertificatePage(doc: any, kvsData: any, ownerData: any, isCustom: boolean) {
   const kvsId = kvsData.kvs_id;
   const verifyUrl = `https://kyllerium.com/verify/${kvsId}`;
-  
-  // Create QR Code buffer with high-fidelity transparency
+  const W = doc.page.width;
+  const H = doc.page.height;
+
+  // ── Full dark background ──
+  doc.rect(0, 0, W, H).fill('#080D1A');
+
+  // ── Subtle grid overlay ──
+  doc.lineWidth(0.3).strokeOpacity(0.08);
+  for (let i = 0; i <= W; i += 60) doc.moveTo(i, 0).lineTo(i, H).stroke('#00E5FF');
+  for (let j = 0; j <= H; j += 60) doc.moveTo(0, j).lineTo(W, j).stroke('#00E5FF');
+  doc.strokeOpacity(1);
+
+  // ── Outer border ──
+  doc.rect(16, 16, W - 32, H - 32).lineWidth(1.2).stroke('#1E2D4A');
+
+  // ── Inner glow border ──
+  doc.rect(22, 22, W - 44, H - 44).lineWidth(0.5).stroke('#00E5FF').strokeOpacity(0.25);
+  doc.strokeOpacity(1);
+
+  // ── Cyan corner accents ──
+  const corner = (x: number, y: number, dx: number, dy: number) => {
+    doc.lineWidth(2.5).strokeColor('#00E5FF').strokeOpacity(0.9);
+    doc.moveTo(x, y + dy * 28).lineTo(x, y).lineTo(x + dx * 28, y).stroke();
+    doc.strokeOpacity(1);
+  };
+  corner(18, 18, 1, 1);
+  corner(W - 18, 18, -1, 1);
+  corner(18, H - 18, 1, -1);
+  corner(W - 18, H - 18, -1, -1);
+
+  // ── Header gradient bar (cyan→purple) ──
+  drawGradientBar(doc, 30, 30, W - 60, 4);
+
+  // ── Logo area ──
+  doc.rect(42, 52, 40, 40).lineWidth(1).stroke('#00E5FF').strokeOpacity(0.6);
+  doc.strokeOpacity(1);
+  // Shield icon drawn with lines
+  doc.lineWidth(1.5).strokeColor('#00E5FF');
+  doc.moveTo(62, 57).lineTo(76, 57).lineTo(76, 69).bezierCurveTo(76, 78, 62, 82, 62, 82)
+     .bezierCurveTo(62, 82, 48, 78, 48, 69).lineTo(48, 57).lineTo(62, 57).stroke();
+  doc.fillColor('#00E5FF').fontSize(7).text('KVS', 56, 68);
+
+  // ── Title block ──
+  doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(20).text('KYLLERIUM VISUAL SIGNATURE', 92, 55, { characterSpacing: 2 });
+  doc.fillColor('#00E5FF').fontSize(8.5).font('Helvetica').text('KYLLERIUM VISUAL SIGNATURE ENGINE  ·  VERSION 3.0', 92, 80, { characterSpacing: 1.5 });
+  doc.fillColor('#9D4EDD').fontSize(8).text(isCustom ? '★  CERTIFICADO DE AUTENTICIDAD PERSONALIZADO  ★' : '★  CERTIFICADO OFICIAL DEL SISTEMA  ★', 92, 93, { characterSpacing: 1 });
+
+  // ── Divider after header ──
+  doc.lineWidth(0.5).strokeColor('#1E2D4A').moveTo(30, 108).lineTo(W - 30, 108).stroke();
+
+  // ── Status badge ──
+  const badgeY = 118;
+  doc.roundedRect(30, badgeY, W - 60, 34, 6).fill('#051409');
+  doc.roundedRect(30, badgeY, W - 60, 34, 6).lineWidth(1).stroke('#10B981').strokeOpacity(0.7);
+  doc.strokeOpacity(1);
+  // Green dot
+  doc.circle(52, badgeY + 17, 5).fill('#10B981');
+  doc.fillColor('#10B981').font('Helvetica-Bold').fontSize(11).text('✓  VERIFIED SECURE  ·  REGISTERED IN KYLLERIUM REGISTRY  ·  ENGINE V3.0', 66, badgeY + 10, { characterSpacing: 0.8 });
+
+  // ── Section: Registry Identifiers ──
+  let curY = badgeY + 52;
+
+  const sectionHeader = (label: string, y: number) => {
+    doc.rect(30, y, 4, 14).fill('#00E5FF');
+    doc.fillColor('#E2E8F0').font('Helvetica-Bold').fontSize(9.5).text(label, 40, y + 2, { characterSpacing: 0.8 });
+    doc.lineWidth(0.4).strokeColor('#1E2D4A').moveTo(30, y + 18).lineTo(W - 30, y + 18).stroke();
+    return y + 26;
+  };
+
+  const row = (label: string, value: string, valColor: string, y: number) => {
+    doc.fillColor('#64748B').font('Helvetica').fontSize(8).text(label.toUpperCase(), 30, y, { width: 140 });
+    doc.fillColor(valColor).font('Helvetica').fontSize(8.5).text(value, 178, y, { width: W - 220, lineBreak: true });
+    return y + 18;
+  };
+
+  curY = sectionHeader('IMAGE METADATA & REGISTRY IDENTIFIERS', curY);
+  curY = row('KVS Registry ID', kvsId, '#00E5FF', curY);
+  curY = row('KVS Fingerprint', kvsData.kvs_fingerprint || 'KVS-FP-NOT-GENERATED', '#9D4EDD', curY);
+  curY = row('SHA-256 Hash', kvsData.hash_sha256 || 'Pending', '#CBD5E1', curY);
+  curY = row('Registered Owner', ownerData?.name || 'Kyllerium System', '#FFFFFF', curY);
+  if (ownerData?.organization) curY = row('Organization', ownerData.organization, '#FFFFFF', curY);
+  if (ownerData?.role) curY = row('Role / Title', ownerData.role, '#FFFFFF', curY);
+  if (isCustom && ownerData?.expirationDate) curY = row('Valid Until', ownerData.expirationDate, '#EF4444', curY);
+  if (isCustom && ownerData?.usageDescription) curY = row('Authorized Usage', ownerData.usageDescription, '#10B981', curY);
+  curY = row('Timestamp (UTC)', new Date(kvsData.upload_date || Date.now()).toISOString(), '#94A3B8', curY);
+
+  curY += 8;
+
+  // ── Section: C2PA ──
+  curY = sectionHeader('C2PA CRYPTOGRAPHIC DOUBLE-SECURITY BINDING', curY);
+
+  let c2paStatus = 'NOT SIGNED';
+  let c2paIssuer = 'N/A';
+  let c2paTime = kvsData.upload_date || new Date().toISOString();
+  if (kvsData.c2pa_manifest) {
+    try {
+      const p = JSON.parse(kvsData.c2pa_manifest);
+      if (p && !p.error) {
+        c2paStatus = 'ACTIVE & SECURED IN IMAGE CONTAINER';
+        c2paIssuer = p.issuer || 'C2PA Test Signing Cert';
+        c2paTime = p.signed_at || c2paTime;
+      }
+    } catch { /* ignore */ }
+  }
+
+  curY = row('C2PA Status', c2paStatus, c2paStatus.startsWith('ACTIVE') ? '#10B981' : '#F59E0B', curY);
+  curY = row('Binding Date (UTC)', new Date(c2paTime).toISOString(), '#00E5FF', curY);
+  if (c2paStatus.startsWith('ACTIVE')) curY = row('Authority Issuer', c2paIssuer, '#94A3B8', curY);
+
+  curY += 8;
+
+  // ── Section: Protection Layers ──
+  curY = sectionHeader('ACTIVE PROVENANCE & SECURITY LAYERS', curY);
+
+  let layers = { dct: true, lsb: true, exif: true, c2pa: true };
+  try {
+    const p = JSON.parse(kvsData.watermark_data || '{}');
+    if (p.layers) layers = p.layers;
+  } catch { /* ignore */ }
+
+  const layerDefs = [
+    { key: 'dct', name: 'DCT', desc: 'Frequency-domain spread-spectrum watermark', active: !!layers.dct },
+    { key: 'lsb', name: 'LSB', desc: 'Spatial-domain least-significant-bits payload', active: !!layers.lsb },
+    { key: 'exif', name: 'EXIF/XMP', desc: 'JPEG Artist, Software, UserComment metadata', active: !!layers.exif },
+    { key: 'c2pa', name: 'C2PA', desc: 'Adobe Content Credentials COSE cryptographic signature', active: !!layers.c2pa },
+  ];
+
+  const colW = (W - 60) / 2;
+  layerDefs.forEach((l, i) => {
+    const lx = 30 + (i % 2) * (colW + 4);
+    const ly = curY + Math.floor(i / 2) * 22;
+    doc.roundedRect(lx, ly, colW - 4, 18, 3).fill(l.active ? '#0A1A0F' : '#0D1117');
+    doc.roundedRect(lx, ly, colW - 4, 18, 3).lineWidth(0.7).stroke(l.active ? '#10B981' : '#1E2D4A').strokeOpacity(0.8);
+    doc.strokeOpacity(1);
+    const dot = l.active ? '#10B981' : '#334155';
+    doc.circle(lx + 12, ly + 9, 4).fill(dot);
+    doc.fillColor(l.active ? '#FFFFFF' : '#475569').font('Helvetica-Bold').fontSize(8).text(l.name, lx + 22, ly + 5);
+    doc.fillColor(l.active ? '#94A3B8' : '#334155').font('Helvetica').fontSize(7).text(l.desc, lx + 60, ly + 6, { width: colW - 68 });
+  });
+
+  curY += 50;
+
+  // ── QR Code + Footer ──
   const qrBuffer = await QRCode.toBuffer(verifyUrl, {
-    color: { dark: '#00E5FF', light: '#00000000' }, // cyan QR over transparent bg
+    color: { dark: '#00E5FF', light: '#00000000' },
+    width: 90,
     margin: 1
   });
 
-  // ── Background & Borders ──
-  // Softer premium dark color (slate/navy blend)
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#0A0F1D');
+  const footerTop = H - 110;
+  doc.lineWidth(0.5).strokeColor('#1E2D4A').moveTo(30, footerTop).lineTo(W - 30, footerTop).stroke();
 
-  // Decorative glowing grid lines (neon cyber aesthetic)
-  doc.lineWidth(1);
-  doc.strokeColor('#1E293B');
-  for (let i = 40; i < doc.page.width; i += 80) {
-    doc.moveTo(i, 0).lineTo(i, doc.page.height).stroke();
-  }
-  for (let j = 40; j < doc.page.height; j += 80) {
-    doc.moveTo(0, j).lineTo(doc.page.width, j).stroke();
-  }
+  // Footer gradient bar
+  drawGradientBar(doc, 30, H - 20, W - 60, 3);
 
-  // Cover background again with an opacity-layered rect for subtle grid visibility
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill('#0A0F1D', 0.92);
+  // QR Code
+  doc.image(qrBuffer, W - 118, footerTop + 8, { width: 82 });
+  doc.lineWidth(0.7).strokeColor('#00E5FF').strokeOpacity(0.4)
+     .rect(W - 120, footerTop + 6, 86, 86).stroke();
+  doc.strokeOpacity(1);
+  doc.fillColor('#00E5FF').font('Helvetica').fontSize(6).text('SCAN TO VERIFY', W - 118, footerTop + 94, { width: 82, align: 'center' });
 
-  // Decorative outer border (neon gradient simulation)
-  doc.lineWidth(2.5);
-  doc.lineJoin('round');
-  doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40).stroke('#1E294B');
-
-  // Glowing cyan corner accents
-  doc.lineWidth(2);
-  doc.strokeColor('#00E5FF');
-  // Top-Left corner accent
-  doc.moveTo(18, 40).lineTo(18, 18).lineTo(40, 18).stroke();
-  // Top-Right corner accent
-  doc.moveTo(doc.page.width - 18, 40).lineTo(doc.page.width - 18, 18).lineTo(doc.page.width - 40, 18).stroke();
-  // Bottom-Left corner accent
-  doc.moveTo(18, doc.page.height - 40).lineTo(18, doc.page.height - 18).lineTo(40, doc.page.height - 18).stroke();
-  // Bottom-Right corner accent
-  doc.moveTo(doc.page.width - 18, doc.page.height - 40).lineTo(doc.page.width - 18, doc.page.height - 18).lineTo(doc.page.width - 40, doc.page.height - 18).stroke();
-
-  // Subtle interior cyan border highlight
-  doc.lineWidth(0.8);
-  doc.rect(26, 26, doc.page.width - 52, doc.page.height - 52).stroke('#00E5FF');
-
-  // ── Header ──
-  doc.moveDown(1.5);
-  doc.fillColor('#FFFFFF').fontSize(22).text('KYLLERIUM VISUAL SIGNATURE', { align: 'center', characterSpacing: 2 });
-  
-  doc.moveDown(0.25);
-  doc.fillColor('#A78BFA').fontSize(9.5).text('CRYPTOGRAPHIC PROVENANCE & AUTHENTICITY RECORD', { align: 'center', characterSpacing: 1.5 });
-  
-  doc.moveDown(0.4);
-  doc.fillColor('#00E5FF').fontSize(11).text(isCustom ? '★ CUSTOM SECURITY CERTIFICATE ★' : '★ OFFICIAL SYSTEM CERTIFICATE ★', { align: 'center', characterSpacing: 1 });
-  
-  // Decorative line
-  doc.moveDown(0.6);
-  doc.lineWidth(0.5);
-  doc.moveTo(60, doc.y).lineTo(doc.page.width - 60, doc.y).stroke('#1E293B');
-  doc.moveDown(0.8);
-
-  // ── Status Banner ──
-  doc.moveDown(0.2);
-  const bannerY = doc.y;
-  const bannerHeight = 32;
-
-  // Draw smooth filled box with rounded corners
-  doc.roundedRect(60, bannerY, doc.page.width - 120, bannerHeight, 8).fill('#0B171A');
-  // Draw border box
-  doc.lineWidth(1);
-  doc.roundedRect(60, bannerY, doc.page.width - 120, bannerHeight, 8).stroke('#10B981');
-  
-  // Print status centered
-  doc.fillColor('#10B981').fontSize(12).text('✓ VERIFIED SECURE & REGISTERED (ENGINE V3.0)', 60, bannerY + 10, { align: 'center', characterSpacing: 1 });
-  doc.y = bannerY + bannerHeight + 20;
-
-  // ── Helper Row Drawing Function ──
-  const drawRow = (label: string, value: string, valueColor = '#FFFFFF') => {
-    const rowY = doc.y;
-    doc.fillColor('#64748B').fontSize(8.5).text(label.toUpperCase(), 60, rowY);
-    doc.fillColor(valueColor).fontSize(8.5).text(value, 200, rowY, { width: doc.page.width - 260, lineBreak: true });
-    doc.moveDown(0.65);
-  };
-
-  // ── Main Metadata Table ──
-  doc.fillColor('#F1F5F9').fontSize(10.5).text('IMAGE METADATA & REGISTRY IDENTIFIERS', 60, doc.y, { characterSpacing: 0.5 });
-  doc.moveDown(0.45);
-
-  drawRow('KVS ID', kvsId, '#00E5FF');
-  drawRow('KVS FINGERPRINT', kvsData.kvs_fingerprint || 'KVS-FINGERPRINT-NOT-GENERATED', '#A78BFA');
-  drawRow('SHA-256 HASH', kvsData.hash_sha256 || 'Pending', '#F1F5F9');
-  drawRow('REGISTERED OWNER', ownerData?.name || 'Kyllerium System', '#FFFFFF');
-  if (ownerData?.organization) drawRow('ORGANIZATION', ownerData.organization, '#FFFFFF');
-  if (ownerData?.role) drawRow('ROLE / TITLE', ownerData.role, '#FFFFFF');
-  
-  if (isCustom) {
-    if (ownerData?.expirationDate) {
-      drawRow('VALID UNTIL', ownerData.expirationDate, '#EF4444'); 
-    }
-    if (ownerData?.usageDescription) {
-      drawRow('AUTHORIZED USAGE', ownerData.usageDescription, '#10B981'); 
-    }
-  }
-  
-  drawRow('TIMESTAMP (UTC)', new Date(kvsData.upload_date || Date.now()).toISOString(), '#94A3B8');
-
-  // Decorative divider
-  doc.moveDown(0.2);
-  doc.lineWidth(0.5);
-  doc.moveTo(60, doc.y).lineTo(doc.page.width - 60, doc.y).stroke('#1E293B');
-  doc.moveDown(0.6);
-
-  // ── C2PA Double Security Binding ──
-  doc.fillColor('#F1F5F9').fontSize(10.5).text('C2PA CRYPTOGRAPHIC DOUBLE-SECURITY BINDING', 60, doc.y, { characterSpacing: 0.5 });
-  doc.moveDown(0.45);
-
-  let c2paStatus = "NOT SIGNED";
-  let c2paIssuer = "N/A";
-  let c2paTime = kvsData.upload_date || new Date().toISOString();
-
-  if (kvsData.c2pa_manifest) {
-    try {
-      const parsedC2pa = JSON.parse(kvsData.c2pa_manifest);
-      if (parsedC2pa && !parsedC2pa.error) {
-        c2paStatus = "ACTIVE & SECURED IN IMAGE CONTAINER";
-        c2paIssuer = parsedC2pa.issuer || "C2PA Test Signing Cert";
-        c2paTime = parsedC2pa.signed_at || c2paTime;
-      }
-    } catch {}
-  }
-
-  drawRow('C2PA Status', c2paStatus, c2paStatus.startsWith("ACTIVE") ? '#10B981' : '#F59E0B');
-  drawRow('Binding Date (UTC)', new Date(c2paTime).toISOString(), '#00E5FF');
-  if (c2paStatus.startsWith("ACTIVE")) {
-    drawRow('Authority Issuer', c2paIssuer, '#94A3B8');
-  }
-
-  // Decorative divider
-  doc.moveDown(0.2);
-  doc.lineWidth(0.5);
-  doc.moveTo(60, doc.y).lineTo(doc.page.width - 60, doc.y).stroke('#1E293B');
-  doc.moveDown(0.6);
-
-  // ── Provenance Layers Checkbox ──
-  doc.fillColor('#F1F5F9').fontSize(10.5).text('ACTIVE PROVENANCE & SECURITY LAYERS', 60, doc.y, { characterSpacing: 0.5 });
-  doc.moveDown(0.55);
-
-  const startLayersY = doc.y;
-  
-  const drawLayer = (name: string, desc: string, active: boolean, xOffset: number, yOffset: number) => {
-    // Draw outer checkbox box with rounded edges
-    doc.roundedRect(xOffset, yOffset, 11, 11, 2).fill(active ? '#0F172A' : '#1A1A1A');
-    doc.lineWidth(1);
-    doc.roundedRect(xOffset, yOffset, 11, 11, 2).stroke(active ? '#00E5FF' : '#334155');
-    
-    if (active) {
-      doc.fillColor('#00E5FF').fontSize(8.5).text('✓', xOffset + 2.5, yOffset + 1);
-    }
-
-    doc.fillColor(active ? '#FFFFFF' : '#475569').fontSize(9).text(name, xOffset + 20, yOffset + 1);
-    doc.fillColor(active ? '#94A3B8' : '#334155').fontSize(8).text(desc, xOffset + 60, yOffset + 2);
-  };
-
-  // Extract layer statuses from DB record
-  let layers = { dct: true, lsb: true, exif: true, c2pa: true };
-  try {
-    const parsed = JSON.parse(kvsData.watermark_data || '{}');
-    if (parsed.layers) layers = parsed.layers;
-  } catch {}
-
-  drawLayer('DCT', 'Frequency-domain spread-spectrum watermark', !!layers.dct, 60, startLayersY);
-  drawLayer('LSB', 'Spatial-domain least-significant-bits payload', !!layers.lsb, 60, startLayersY + 18);
-  drawLayer('EXIF', 'JPEG Artist, Software, and UserComment metadata', !!layers.exif, 60, startLayersY + 36);
-  drawLayer('C2PA', 'Adobe Content Credentials COSE cryptographic signature', !!layers.c2pa, 60, startLayersY + 54);
-
-  // ── Footer & QR Code ──
-  const footerY = doc.page.height - 100;
-  doc.lineWidth(0.5);
-  doc.moveTo(60, footerY - 8).lineTo(doc.page.width - 60, footerY - 8).stroke('#1E293B');
-
-  // QR Code Placement
-  doc.image(qrBuffer, doc.page.width - 120, footerY, { width: 60 });
-
-  // Verification instructions on footer
-  doc.fillColor('#94A3B8').fontSize(8.5).text('CERTIFICATE SECURED BY KYLLERIUM CORPORATION', 60, footerY + 8, { characterSpacing: 0.5 });
-  doc.fillColor('#64748B').fontSize(7.5).text('This document certifies that the corresponding digital asset has been securely registered in the Kyllerium system with military-grade invisible watermarking and cryptographic C2PA provenance signatures.', 60, footerY + 20, { width: doc.page.width - 200 });
-  doc.fillColor('#00E5FF').fontSize(7.5).text(`Verify provenance directly at: kyllerium.com/verify/${kvsId}`, 60, footerY + 46);
+  // Footer text
+  doc.fillColor('#94A3B8').font('Helvetica-Bold').fontSize(8).text('CERTIFICATE SECURED BY KYLLERIUM CORPORATION', 30, footerTop + 10, { characterSpacing: 0.5 });
+  doc.fillColor('#475569').font('Helvetica').fontSize(7).text(
+    'This document certifies that the corresponding digital asset has been securely registered in the Kyllerium system with military-grade invisible watermarking and cryptographic C2PA provenance signatures. Any alteration of this document or the associated image file voids all registered protections.',
+    30, footerTop + 24, { width: W - 175 }
+  );
+  doc.fillColor('#00E5FF').font('Helvetica').fontSize(7.5).text(`Verify directly: kyllerium.com/verify/${kvsId}`, 30, footerTop + 72, { characterSpacing: 0.3 });
+  doc.fillColor('#334155').fontSize(7).text(`KVSE v3.0  ·  ${new Date().getFullYear()} Kyllerium Corp  ·  All rights reserved`, 30, footerTop + 85);
 }
 
 /** Generates standard or custom certificate */
 export async function generateCertificate(kvsData: any, ownerData: any, isCustom: boolean): Promise<Buffer> {
   return new Promise(async (resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
       const buffers: Buffer[] = [];
       doc.on('data', buffers.push.bind(buffers));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
-
       await drawCertificatePage(doc, kvsData, ownerData, isCustom);
-
       doc.end();
-    } catch (err) {
-      reject(err);
-    }
+    } catch (err) { reject(err); }
   });
 }
 
@@ -217,21 +209,14 @@ export async function generateCertificate(kvsData: any, ownerData: any, isCustom
 export async function generateCombinedCertificate(kvsData: any, officialOwner: any, customOwner: any): Promise<Buffer> {
   return new Promise(async (resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
       const buffers: Buffer[] = [];
       doc.on('data', buffers.push.bind(buffers));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
-
-      // Page 1: Official Certificate
       await drawCertificatePage(doc, kvsData, officialOwner, false);
-
-      // Page 2: Custom Certificate
-      doc.addPage({ size: 'A4', margin: 40 });
+      doc.addPage({ size: 'A4', margin: 0 });
       await drawCertificatePage(doc, kvsData, customOwner, true);
-
       doc.end();
-    } catch (err) {
-      reject(err);
-    }
+    } catch (err) { reject(err); }
   });
 }

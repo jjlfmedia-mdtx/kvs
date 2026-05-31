@@ -116,7 +116,7 @@ export default function AdminPage() {
           { label: 'TOTAL ASSETS', value: total, icon: <ImageIcon size={20} />, color: 'var(--accent-cyan)' },
           { label: 'VERIFIED', value: verified, icon: <CheckCircle size={20} />, color: '#10B981' },
           { label: 'UNVERIFIED', value: total - verified, icon: <XOctagon size={20} />, color: '#F59E0B' },
-          { label: 'REGISTRY VERSION', value: 'v2.0', icon: <BarChart2 size={20} />, color: 'var(--accent-purple)' },
+          { label: 'REGISTRY VERSION', value: 'v3.0', icon: <BarChart2 size={20} />, color: 'var(--accent-purple)' },
         ].map((stat) => (
           <div key={stat.label} className="glass-card rounded-2xl p-5 border border-[var(--glass-border)]">
             <div className="flex items-center justify-between mb-3">

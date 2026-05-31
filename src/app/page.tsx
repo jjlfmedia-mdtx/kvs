@@ -1,6 +1,6 @@
 // src/app/page.tsx
 "use client";
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, CheckCircle, ShieldCheck, Download, FileText, Loader2, Sparkles, X, Info, Shield, RefreshCw } from 'lucide-react';
@@ -32,6 +32,8 @@ export default function Home() {
   const [savingCustom, setSavingCustom] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showProtectGlow, setShowProtectGlow] = useState(false);
+  const glowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Stats and activity logs
   const [stats, setStats] = useState<any>({
@@ -131,6 +133,10 @@ export default function Home() {
       if (res.ok) {
         setResult(data);
         setStatus('success');
+        // Trigger screen-edge protect glow
+        setShowProtectGlow(true);
+        if (glowTimer.current) clearTimeout(glowTimer.current);
+        glowTimer.current = setTimeout(() => setShowProtectGlow(false), 2900);
         fetchStats(); // Update database counts dynamically
       } else {
         throw new Error(data.error || 'Upload failed');
@@ -193,10 +199,9 @@ export default function Home() {
     a.click();
   };
 
-  const handleDownloadChoice = (choice: 'official' | 'custom' | 'combined' | 'both') => {
+  const handleDownloadChoice = (choice: 'official' | 'custom' | 'combined' | 'both' | 'png-official' | 'png-custom' | 'png-both') => {
     if (!result?.kvs_id) return;
     const id = result.kvs_id;
-    
     if (choice === 'official') {
       triggerDownload(`/api/certificate/${id}`, `KVS-Official-${id}.pdf`);
     } else if (choice === 'custom') {
@@ -205,9 +210,14 @@ export default function Home() {
       triggerDownload(`/api/certificate/${id}/combined`, `KVS-Combined-${id}.pdf`);
     } else if (choice === 'both') {
       triggerDownload(`/api/certificate/${id}`, `KVS-Official-${id}.pdf`);
-      setTimeout(() => {
-        triggerDownload(`/api/certificate/${id}/custom`, `KVS-Custom-${id}.pdf`);
-      }, 400);
+      setTimeout(() => triggerDownload(`/api/certificate/${id}/custom`, `KVS-Custom-${id}.pdf`), 400);
+    } else if (choice === 'png-official') {
+      triggerDownload(`/api/certificate/${id}/png?type=official`, `KVS-Official-${id}.png`);
+    } else if (choice === 'png-custom') {
+      triggerDownload(`/api/certificate/${id}/png?type=custom`, `KVS-Custom-${id}.png`);
+    } else if (choice === 'png-both') {
+      triggerDownload(`/api/certificate/${id}/png?type=official`, `KVS-Official-${id}.png`);
+      setTimeout(() => triggerDownload(`/api/certificate/${id}/png?type=custom`, `KVS-Custom-${id}.png`), 400);
     }
   };
 
@@ -216,6 +226,8 @@ export default function Home() {
 
   return (
     <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden">
+      {/* Protect Glow Ring */}
+      {showProtectGlow && <div className="protect-glow-ring" aria-hidden />}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-[var(--accent-cyan)]/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[var(--accent-purple)]/5 rounded-full blur-[100px] pointer-events-none" />
 
@@ -238,11 +250,12 @@ export default function Home() {
 
             <div
               {...getRootProps()}
-              className={`glass-card rounded-3xl p-12 text-center cursor-pointer transition-all duration-500 border-2 border-dashed ${
+              className={`rounded-[28px] p-12 text-center cursor-pointer transition-all duration-500 border-2 border-dashed backdrop-blur-xl ${
                 isDragActive
                   ? 'border-[var(--accent-cyan)] bg-[var(--accent-cyan)]/5 shadow-cyan-glow-intense'
                   : 'border-[var(--glass-border)] hover:border-[var(--accent-cyan)]/50 hover:shadow-cyan-glow'
               }`}
+              style={{ background: 'rgba(10,17,40,0.55)' }}
             >
               <input {...getInputProps()} />
               {preview ? (
@@ -269,7 +282,7 @@ export default function Home() {
 
             {preview && (
               <div className="mt-6 flex justify-center">
-                <button onClick={handleUpload} className="bg-[var(--accent-cyan)] text-black font-mono font-bold py-4 px-14 rounded-2xl hover:shadow-cyan-glow-intense transition-all tracking-widest text-base">
+                <button onClick={handleUpload} className="bg-[var(--accent-cyan)] text-black font-mono font-bold py-4 px-14 rounded-[18px] hover:shadow-cyan-glow-intense hover:scale-105 active:scale-95 transition-all duration-200 tracking-widest text-base">
                   PROTEGER IMAGEN
                 </button>
               </div>
@@ -498,51 +511,92 @@ export default function Home() {
                 <p className="text-xs text-[var(--text-secondary)] mt-1">Selecciona el formato para exportar tus registros de seguridad KVS.</p>
               </div>
 
-              <div className="flex flex-col gap-3">
-                <button 
+              <div className="flex flex-col gap-2.5">
+                {/* PDF Section */}
+                <p className="text-[9px] font-mono tracking-widest text-[var(--text-secondary)] mb-1">FORMATO PDF</p>
+
+                <button
                   onClick={() => { handleDownloadChoice('official'); setShowDownloadModal(false); }}
-                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-[var(--accent-cyan)]/10 hover:border-[var(--accent-cyan)]/30 transition flex justify-between items-center group"
+                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-[var(--accent-cyan)]/10 hover:border-[var(--accent-cyan)]/30 transition flex justify-between items-center group"
                 >
                   <div>
                     <p className="text-sm font-bold group-hover:text-[var(--accent-cyan)] transition">Certificado Oficial (PDF)</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado básico del sistema con firma criptográfica.</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado del sistema con firma criptográfica KVS.</p>
                   </div>
-                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-cyan)]" />
+                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-cyan)] transition" />
                 </button>
 
-                <button 
+                <button
                   onClick={() => { handleDownloadChoice('custom'); setShowDownloadModal(false); }}
                   disabled={!customSaved}
-                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-[var(--accent-purple)]/10 hover:border-[var(--accent-purple)]/30 disabled:opacity-40 disabled:hover:bg-white/5 disabled:hover:border-white/10 transition flex justify-between items-center group"
+                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-[var(--accent-purple)]/10 hover:border-[var(--accent-purple)]/30 disabled:opacity-35 transition flex justify-between items-center group"
                 >
                   <div>
                     <p className="text-sm font-bold group-hover:text-[var(--accent-purple)] transition">Certificado Personalizado (PDF)</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado detallado con tus datos de propietario y uso.</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">PDF con tus datos de propietario y uso autorizados.</p>
                   </div>
-                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-purple)]" />
+                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-purple)] transition" />
                 </button>
 
-                <button 
+                <button
                   onClick={() => { handleDownloadChoice('combined'); setShowDownloadModal(false); }}
-                  className="w-full text-left p-4 bg-gradient-to-r from-[var(--accent-cyan)]/5 to-[var(--accent-purple)]/5 border border-white/10 rounded-2xl hover:from-[var(--accent-cyan)]/10 hover:to-[var(--accent-purple)]/10 hover:border-[var(--accent-cyan)]/40 transition flex justify-between items-center group"
+                  className="w-full text-left p-4 bg-gradient-to-r from-[var(--accent-cyan)]/5 to-[var(--accent-purple)]/5 border border-white/10 rounded-[18px] hover:from-[var(--accent-cyan)]/10 hover:to-[var(--accent-purple)]/10 hover:border-[var(--accent-cyan)]/40 transition flex justify-between items-center group"
                 >
                   <div>
-                    <p className="text-sm font-bold text-white transition">Certificado Combinado (PDF Único)</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Un solo documento de 2 páginas con ambas variantes oficiales.</p>
+                    <p className="text-sm font-bold">PDF Combinado (2 páginas)</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Un solo documento con ambos certificados oficial y personalizado.</p>
                   </div>
                   <Download size={16} className="text-[var(--accent-cyan)]" />
                 </button>
 
-                <button 
+                <button
                   onClick={() => { handleDownloadChoice('both'); setShowDownloadModal(false); }}
                   disabled={!customSaved}
-                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-white/5 transition flex justify-between items-center group"
+                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-white/10 disabled:opacity-35 transition flex justify-between items-center group"
                 >
                   <div>
-                    <p className="text-sm font-bold group-hover:text-white transition">Descargar Ambos (Separados)</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Descarga simultánea de los dos certificados individuales.</p>
+                    <p className="text-sm font-bold">Ambos PDFs (separados)</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Descarga simultánea de los dos certificados PDF individuales.</p>
                   </div>
-                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-white" />
+                  <Download size={16} className="text-[var(--text-secondary)]" />
+                </button>
+
+                {/* PNG Section */}
+                <p className="text-[9px] font-mono tracking-widest text-[var(--text-secondary)] mt-2 mb-1">FORMATO IMAGEN (PNG)</p>
+
+                <button
+                  onClick={() => { handleDownloadChoice('png-official'); setShowDownloadModal(false); }}
+                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-emerald-500/10 hover:border-emerald-500/30 transition flex justify-between items-center group"
+                >
+                  <div>
+                    <p className="text-sm font-bold group-hover:text-emerald-400 transition">Imagen PNG – Oficial</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado oficial exportado como imagen PNG de alta resolución.</p>
+                  </div>
+                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-emerald-400 transition" />
+                </button>
+
+                <button
+                  onClick={() => { handleDownloadChoice('png-custom'); setShowDownloadModal(false); }}
+                  disabled={!customSaved}
+                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-emerald-500/10 hover:border-emerald-500/30 disabled:opacity-35 transition flex justify-between items-center group"
+                >
+                  <div>
+                    <p className="text-sm font-bold group-hover:text-emerald-400 transition">Imagen PNG – Personalizado</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado personalizado exportado como PNG de alta resolución.</p>
+                  </div>
+                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-emerald-400 transition" />
+                </button>
+
+                <button
+                  onClick={() => { handleDownloadChoice('png-both'); setShowDownloadModal(false); }}
+                  disabled={!customSaved}
+                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-white/10 disabled:opacity-35 transition flex justify-between items-center group"
+                >
+                  <div>
+                    <p className="text-sm font-bold">Ambas imágenes PNG</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Descarga simultánea de los dos certificados como PNG.</p>
+                  </div>
+                  <Download size={16} className="text-[var(--text-secondary)]" />
                 </button>
               </div>
             </motion.div>
