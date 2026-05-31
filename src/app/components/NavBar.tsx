@@ -66,13 +66,6 @@ export default function NavBar() {
               )}
             </Link>
           ))}
-          {/* Command Center – shows as discrete link, password inside */}
-          <Link
-            href="/admin"
-            className="text-[var(--text-secondary)]/50 hover:text-[var(--text-secondary)] text-xs font-mono tracking-widest transition-colors"
-          >
-            [CMD]
-          </Link>
         </div>
 
         {/* CTA Button */}

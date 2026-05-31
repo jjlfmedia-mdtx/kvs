@@ -5,7 +5,8 @@ function authenticate(req: Request) {
   const authHeader = req.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
   const token = authHeader.substring(7);
-  const expectedToken = process.env.ADMIN_TOKEN || 'KVS-ADMIN-2026';
+  const expectedToken = process.env.ADMIN_TOKEN;
+  if (!expectedToken) return false;
   return token === expectedToken;
 }
 

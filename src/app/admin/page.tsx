@@ -15,7 +15,7 @@ export default function AdminPage() {
       setAuthed(true);
       fetchImages(token);
     } else {
-      setError('Token too short — minimum 6 characters');
+      setError('Token too short - minimum 6 characters');
     }
   };
 
@@ -57,13 +57,13 @@ export default function AdminPage() {
           
           <input 
             type="password" 
-            placeholder="KVS-ADMIN-2026"
+            placeholder="Administrator token"
             className="w-full bg-black/60 border border-white/10 rounded-xl p-4 mb-2 font-mono text-sm focus:border-[var(--accent-cyan)] outline-none transition text-white placeholder-white/20 text-center tracking-widest"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && login()}
           />
-          <p className="text-[10px] font-mono text-[var(--text-secondary)] mb-6">Token predeterminado: <span className="text-[var(--accent-cyan)] font-bold">KVS-ADMIN-2026</span></p>
+          <p className="text-[10px] font-mono text-[var(--text-secondary)] mb-6">Private access only</p>
           <button 
             onClick={login} 
             className="w-full bg-[var(--accent-cyan)] text-black font-mono font-bold py-4 rounded-xl tracking-widest hover:shadow-cyan-glow-intense transition"
