@@ -36,7 +36,19 @@ export default function Home() {
     return Array.from({ length: 16 }, (_, i) => ({ id: i, text: makeRow() }));
   }, []);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
+    if (fileRejections.length > 0) {
+      const err = fileRejections[0].errors[0];
+      setStatus('error');
+      if (err.code === 'file-too-large') {
+        setProgressMsg('La imagen supera el límite máximo de 4.5MB permitido en servidores en la nube.');
+      } else {
+        setProgressMsg(err.message || 'Error al cargar el archivo.');
+      }
+      setFile(null);
+      setPreview(null);
+      return;
+    }
     const selected = acceptedFiles[0];
     if (selected) {
       setFile(selected);
@@ -50,7 +62,7 @@ export default function Home() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },
-    maxSize: 50 * 1024 * 1024,
+    maxSize: 4.5 * 1024 * 1024,
     multiple: false
   });
 
@@ -76,7 +88,15 @@ export default function Home() {
 
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await res.json();
+      let data: any;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text || `Error del servidor (${res.status})`);
+      }
+
       if (res.ok) {
         setResult(data);
         setStatus('success');
@@ -102,8 +122,13 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ field: 'description', draft: customData.role, context: result })
       });
+      if (!res.ok) {
+        throw new Error('AI Enhancement failed');
+      }
       const data = await res.json();
       if (data.enhanced) setCustomData(prev => ({ ...prev, role: data.enhanced }));
+    } catch (err) {
+      console.error(err);
     } finally {
       setEnhancing(false);
     }

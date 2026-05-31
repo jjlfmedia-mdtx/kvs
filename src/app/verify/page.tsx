@@ -19,7 +19,12 @@ export default function VerifyPage() {
   const [progressMsg, setProgressMsg] = useState('');
   const [result, setResult] = useState<any>(null);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
+    if (fileRejections.length > 0) {
+      const err = fileRejections[0].errors[0];
+      alert(err.code === 'file-too-large' ? 'La imagen supera el límite máximo de 4.5MB permitido en servidores en la nube.' : err.message || 'Error al cargar el archivo.');
+      return;
+    }
     const selected = acceptedFiles[0];
     if (selected) {
       setPreview(URL.createObjectURL(selected));
@@ -30,6 +35,7 @@ export default function VerifyPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },
+    maxSize: 4.5 * 1024 * 1024,
     multiple: false
   });
 
@@ -44,11 +50,19 @@ export default function VerifyPage() {
     formData.append('file', fileToVerify);
     try {
       const res = await fetch('/api/verify', { method: 'POST', body: formData });
-      const data = await res.json();
+      let data: any;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text || `Error del servidor (${res.status})`);
+      }
       setResult(data);
       setStatus('result');
     } catch (err: any) {
       console.error(err);
+      alert(err.message || 'Error durante la verificación.');
       setStatus('idle');
     }
   };
