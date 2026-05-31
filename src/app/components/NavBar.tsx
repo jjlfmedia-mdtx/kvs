@@ -1,26 +1,13 @@
 "use client";
 // src/app/components/NavBar.tsx
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ShieldCheck, Menu, X } from "lucide-react";
 
 export default function NavBar() {
   const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
-  const [showGlow, setShowGlow] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // Trigger screen glow on first visit
-  useEffect(() => {
-    setMounted(true);
-    const seen = sessionStorage.getItem("kvs-glow-seen");
-    if (!seen) {
-      setShowGlow(true);
-      sessionStorage.setItem("kvs-glow-seen", "1");
-      setTimeout(() => setShowGlow(false), 3600);
-    }
-  }, []);
 
   const links = [
     { href: "/", label: "Authenticate" },
@@ -33,8 +20,6 @@ export default function NavBar() {
   return (
     <>
       {/* ── Screen-Edge Glow Ring (first visit) ── */}
-      {mounted && showGlow && <div className="screen-glow-ring" aria-hidden />}
-
       <nav className="sticky top-0 z-50 border-b border-[var(--glass-border)] glass-card py-3.5 px-6 md:px-12 flex justify-between items-center shadow-cyan-glow"
         style={{ borderRadius: 0 }}>
         {/* Logo */}

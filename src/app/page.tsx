@@ -1,10 +1,11 @@
 // src/app/page.tsx
 "use client";
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, CheckCircle, ShieldCheck, Download, FileText, Loader2, Sparkles, X, Info, Shield, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { triggerScreenEdgeGlow } from './components/ScreenEdgeGlow';
 
 type LayerBadgeProps = { label: string; active: boolean; color: string };
 function LayerBadge({ label, active, color }: LayerBadgeProps) {
@@ -32,8 +33,6 @@ export default function Home() {
   const [savingCustom, setSavingCustom] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const [showProtectGlow, setShowProtectGlow] = useState(false);
-  const glowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Stats and activity logs
   const [stats, setStats] = useState<any>({
@@ -133,10 +132,7 @@ export default function Home() {
       if (res.ok) {
         setResult(data);
         setStatus('success');
-        // Trigger screen-edge protect glow
-        setShowProtectGlow(true);
-        if (glowTimer.current) clearTimeout(glowTimer.current);
-        glowTimer.current = setTimeout(() => setShowProtectGlow(false), 2900);
+        triggerScreenEdgeGlow('protect');
         fetchStats(); // Update database counts dynamically
       } else {
         throw new Error(data.error || 'Upload failed');
@@ -226,8 +222,6 @@ export default function Home() {
 
   return (
     <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden">
-      {/* Protect Glow Ring */}
-      {showProtectGlow && <div className="protect-glow-ring" aria-hidden />}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-[var(--accent-cyan)]/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[var(--accent-purple)]/5 rounded-full blur-[100px] pointer-events-none" />
 

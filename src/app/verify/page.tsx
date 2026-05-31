@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ShieldCheck, ShieldAlert, ShieldX, Loader2, FileText, Info } from 'lucide-react';
+import { triggerScreenEdgeGlow } from '../components/ScreenEdgeGlow';
 
 function InfoRow({ label, value, mono = false, color }: { label: string; value: string; mono?: boolean; color?: string }) {
   return (
@@ -43,6 +44,7 @@ export default function VerifyPage() {
 
   const handleVerify = async (fileToVerify: File) => {
     setStatus('verifying');
+    triggerScreenEdgeGlow('verify');
     setProgressMsg(verifySteps[0]);
     verifySteps.forEach((s, i) => { if (i > 0) setTimeout(() => setProgressMsg(s), i * 700); });
 

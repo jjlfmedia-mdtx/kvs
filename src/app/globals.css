@@ -70,46 +70,130 @@ body {
   background-clip: text;
 }
 
-/* ─── Screen-Edge Illumination ───────────────── */
-@keyframes borderGlow {
-  0%   { opacity: 0; }
-  15%  { opacity: 1; }
-  70%  { opacity: 1; }
-  100% { opacity: 0; }
+/* Screen-edge aurora */
+@property --edge-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
 }
 
-.screen-glow-ring {
+@keyframes edgeGlowInOut {
+  0% { opacity: 0; filter: saturate(1.1) brightness(0.9); }
+  12% { opacity: 1; filter: saturate(1.45) brightness(1.08); }
+  78% { opacity: 0.96; }
+  100% { opacity: 0; filter: saturate(1.2) brightness(0.95); }
+}
+
+@keyframes edgeAuroraSpin {
+  to { --edge-angle: 360deg; }
+}
+
+@keyframes edgeBreath {
+  0%, 100% { transform: scale(1); opacity: 0.72; }
+  50% { transform: scale(1.012); opacity: 1; }
+}
+
+.screen-edge-glow {
+  --edge-size: clamp(12px, 2.4vw, 34px);
+  --edge-blur: clamp(16px, 3vw, 44px);
   position: fixed;
   inset: 0;
-  pointer-events: none;
   z-index: 9999;
-  border-radius: 0;
-  animation: borderGlow 3.5s ease-out forwards;
-  box-shadow:
-    0 0 0 4px rgba(0, 229, 255, 0.55),
-    0 0 60px 10px rgba(0, 229, 255, 0.3),
-    inset 0 0 120px rgba(157, 78, 221, 0.2);
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  animation: edgeGlowInOut 3.6s ease-in-out forwards;
+  contain: paint;
 }
 
-/* ─── Protect-Image Glow (fired on upload success) ── */
-@keyframes protectGlow {
-  0%   { opacity: 0; }
-  10%  { opacity: 1; }
-  70%  { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-.protect-glow-ring {
-  position: fixed;
+.screen-edge-glow__aurora,
+.screen-edge-glow__line {
+  position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 9999;
-  animation: protectGlow 2.8s ease-out forwards;
-  box-shadow:
-    0 0 0 4px rgba(0, 229, 255, 0.7),
-    0 0 80px 16px rgba(0, 229, 255, 0.35),
-    inset 0 0 160px rgba(0, 229, 255, 0.12),
-    0 0 200px 60px rgba(157, 78, 221, 0.18);
+}
+
+.screen-edge-glow__aurora {
+  padding: var(--edge-size);
+  background:
+    conic-gradient(
+      from var(--edge-angle) at 50% 50%,
+      rgba(0, 229, 255, 0.96),
+      rgba(96, 165, 250, 0.82),
+      rgba(217, 70, 239, 0.92),
+      rgba(244, 114, 182, 0.82),
+      rgba(16, 185, 129, 0.74),
+      rgba(0, 229, 255, 0.96)
+    );
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  animation: edgeAuroraSpin 7s linear infinite, edgeBreath 2.4s ease-in-out infinite;
+}
+
+.screen-edge-glow__aurora--wide {
+  filter: blur(var(--edge-blur));
+  opacity: 0.76;
+}
+
+.screen-edge-glow__aurora--soft {
+  --edge-size: clamp(4px, 0.9vw, 12px);
+  filter: blur(clamp(5px, 1vw, 14px));
+  opacity: 0.88;
+  animation-duration: 5.6s, 2.1s;
+}
+
+.screen-edge-glow__line {
+  padding: max(2px, 0.18vw);
+  background:
+    conic-gradient(
+      from calc(var(--edge-angle) + 48deg) at 50% 50%,
+      #00e5ff,
+      #7dd3fc,
+      #a855f7,
+      #fb7185,
+      #34d399,
+      #00e5ff
+    );
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  animation: edgeAuroraSpin 5.2s linear infinite;
+  opacity: 0.95;
+}
+
+.screen-edge-glow--protect {
+  animation-duration: 3s;
+}
+
+.screen-edge-glow--protect .screen-edge-glow__aurora {
+  animation-duration: 4.8s, 1.55s;
+}
+
+.screen-edge-glow--verify {
+  animation-duration: 3.2s;
+}
+
+.screen-edge-glow--verify .screen-edge-glow__aurora {
+  filter: blur(calc(var(--edge-blur) * 0.86));
+}
+
+@media (max-width: 640px) {
+  .screen-edge-glow {
+    --edge-size: clamp(10px, 4.6vw, 22px);
+    --edge-blur: clamp(14px, 5vw, 28px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-edge-glow,
+  .screen-edge-glow__aurora,
+  .screen-edge-glow__line {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
 }
 
 /* ─── Matrix Slide ───────────────────────────── */
