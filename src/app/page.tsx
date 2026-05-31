@@ -1,8 +1,10 @@
+// src/app/page.tsx
 "use client";
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UploadCloud, CheckCircle, ShieldCheck, Download, FileText, Loader2, Sparkles, X, Info } from 'lucide-react';
+import { UploadCloud, CheckCircle, ShieldCheck, Download, FileText, Loader2, Sparkles, X, Info, Shield, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
 
 type LayerBadgeProps = { label: string; active: boolean; color: string };
 function LayerBadge({ label, active, color }: LayerBadgeProps) {
@@ -29,12 +31,41 @@ export default function Home() {
   const [customSaved, setCustomSaved] = useState(false);
   const [savingCustom, setSavingCustom] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  
+  // Stats and activity logs
+  const [stats, setStats] = useState<any>({
+    totalAssets: 0,
+    verificationsCount: 0,
+    certificatesCount: 0,
+    systemHealth: '99.98%',
+    activities: []
+  });
+
   const matrixRows = useMemo(() => {
     const chars = '0123456789ABCDEF{}[]()<>+-/*=KVS';
     const makeRow = () =>
       Array.from({ length: 52 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
     return Array.from({ length: 16 }, (_, i) => ({ id: i, text: makeRow() }));
   }, []);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/platform/stats');
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+    const interval = setInterval(fetchStats, 20000);
+    return () => clearInterval(interval);
+  }, [fetchStats]);
 
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
     if (fileRejections.length > 0) {
@@ -71,7 +102,7 @@ export default function Home() {
     'Embedding DCT spread-spectrum watermark...',
     'Injecting LSB steganography...',
     'Writing EXIF/XMP metadata...',
-    'Signing C2PA manifest...',
+    'Signing C2PA manifest (WASM Engine v3.0)...',
     'Finalizing & saving to registry...'
   ];
 
@@ -83,7 +114,7 @@ export default function Home() {
     formData.append('file', file);
 
     steps.forEach((s, i) => {
-      if (i > 0) setTimeout(() => setProgressMsg(s), i * 900);
+      if (i > 0) setTimeout(() => setProgressMsg(s), i * 800);
     });
 
     try {
@@ -100,6 +131,7 @@ export default function Home() {
       if (res.ok) {
         setResult(data);
         setStatus('success');
+        fetchStats(); // Update database counts dynamically
       } else {
         throw new Error(data.error || 'Upload failed');
       }
@@ -154,24 +186,29 @@ export default function Home() {
     }
   };
 
-  const downloadAllPDFs = async () => {
+  const triggerDownload = (url: string, filename: string) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+  };
+
+  const handleDownloadChoice = (choice: 'official' | 'custom' | 'combined' | 'both') => {
     if (!result?.kvs_id) return;
-    // Official PDF
-    const offRes = await fetch(`/api/certificate/${result.kvs_id}`);
-    const offBlob = await offRes.blob();
-    const a1 = document.createElement('a');
-    a1.href = URL.createObjectURL(offBlob);
-    a1.download = `KVS-Official-${result.kvs_id}.pdf`;
-    a1.click();
-    // Custom PDF (after small delay so browser handles both)
-    setTimeout(async () => {
-      const custRes = await fetch(`/api/certificate/${result.kvs_id}/custom`);
-      const custBlob = await custRes.blob();
-      const a2 = document.createElement('a');
-      a2.href = URL.createObjectURL(custBlob);
-      a2.download = `KVS-Custom-${result.kvs_id}.pdf`;
-      a2.click();
-    }, 400);
+    const id = result.kvs_id;
+    
+    if (choice === 'official') {
+      triggerDownload(`/api/certificate/${id}`, `KVS-Official-${id}.pdf`);
+    } else if (choice === 'custom') {
+      triggerDownload(`/api/certificate/${id}/custom`, `KVS-Custom-${id}.pdf`);
+    } else if (choice === 'combined') {
+      triggerDownload(`/api/certificate/${id}/combined`, `KVS-Combined-${id}.pdf`);
+    } else if (choice === 'both') {
+      triggerDownload(`/api/certificate/${id}`, `KVS-Official-${id}.pdf`);
+      setTimeout(() => {
+        triggerDownload(`/api/certificate/${id}/custom`, `KVS-Custom-${id}.pdf`);
+      }, 400);
+    }
   };
 
   const layers = result?.layers || {};
@@ -188,14 +225,14 @@ export default function Home() {
           <motion.div key="upload" className="w-full max-w-3xl relative z-10" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <div className="text-center mb-10">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/30 text-[var(--accent-cyan)] text-xs font-mono mb-6 tracking-widest shadow-cyan-glow">
-                <ShieldCheck size={14} /> MILITARY-GRADE PROVENANCE
+                <ShieldCheck size={14} /> KVS ENGINE V3.0 PROVENANCE
               </div>
               <h1 className="text-5xl md:text-6xl font-bold mb-5 tracking-tight">
                 Authenticity Beyond<br />
                 <span className="text-gradient font-extrabold">Visibility.</span>
               </h1>
               <p className="text-[var(--text-secondary)] text-base max-w-xl mx-auto leading-relaxed">
-                Sube tu imagen y KVS inyectará automáticamente marcas de agua DCT, esteganografía LSB, metadatos EXIF y firma C2PA — todo invisible, todo verificable.
+                Protege la autoría intelectual de tus imágenes. KVS Engine v3.0 inyecta marcas de agua DCT, esteganografía LSB y firma criptográfica C2PA de forma invisible e indestructible.
               </p>
             </div>
 
@@ -224,7 +261,7 @@ export default function Home() {
                     {['JPEG', 'PNG', 'WEBP'].map(f => (
                       <span key={f} className="px-3 py-1 rounded-full bg-black/40 border border-white/10 text-xs font-mono text-[var(--text-secondary)]">{f}</span>
                     ))}
-                    <span className="px-3 py-1 rounded-full bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/30 text-xs font-mono text-[var(--accent-cyan)]">MAX 50MB</span>
+                    <span className="px-3 py-1 rounded-full bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/30 text-xs font-mono text-[var(--accent-cyan)]">MAX 4.5MB</span>
                   </div>
                 </div>
               )}
@@ -318,7 +355,7 @@ export default function Home() {
                     <div className="bg-black/60 rounded-2xl p-4 border border-[var(--accent-purple)]/30 col-span-1 sm:col-span-2" style={{ boxShadow: '0 0 20px rgba(157,78,221,0.1)' }}>
                       <p className="text-[9px] text-[var(--accent-purple)] font-mono tracking-widest mb-2">KVS UNIQUE FINGERPRINT</p>
                       <p className="font-mono text-base font-bold break-all" style={{ color: 'var(--accent-purple)' }}>{result.kvs_fingerprint}</p>
-                      <p className="text-[9px] text-[var(--text-secondary)] mt-1.5 font-mono">SHA-256 del contenido + KVS-ID + timestamp → formateado como UUID branded</p>
+                      <p className="text-[9px] text-[var(--text-secondary)] mt-1.5 font-mono">SHA-256 del contenido + KVS-ID + timestamp → Engine v3.0 Secure Hash</p>
                     </div>
                   </div>
 
@@ -358,9 +395,9 @@ export default function Home() {
 
                   {/* Verification link */}
                   <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                    <p className="text-[10px] text-[var(--text-secondary)] font-mono tracking-widest mb-1.5">ENLACE DE VERIFICACIÓN</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] font-mono tracking-widest mb-1.5">ENLACE DE VERIFICACIÓN DIRECTA</p>
                     <p className="font-mono text-xs text-[var(--accent-purple)] break-all">https://kyllerium.com/verify/{result.kvs_id}</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-1">Verificación local disponible en <span className="text-white/60">/verify</span></p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-1">Verificación directa disponible haciendo clic en el enlace o ingresando el ID en <span className="text-white/60">/verify</span></p>
                   </div>
                 </div>
               </div>
@@ -374,7 +411,7 @@ export default function Home() {
                       <p className="text-xs text-[var(--text-secondary)]">Descarga el certificado oficial o agrega tus datos personales para uno personalizado.</p>
                     </div>
                     <div className="flex gap-3 shrink-0">
-                      <button onClick={downloadAllPDFs} className="flex items-center gap-2 px-5 py-3 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition text-sm font-bold">
+                      <button onClick={() => setShowDownloadModal(true)} className="flex items-center gap-2 px-5 py-3 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition text-sm font-bold">
                         <FileText size={16} /> Descargar PDFs
                       </button>
                       <button onClick={() => setShowCustomForm(true)} className="flex items-center gap-2 px-5 py-3 bg-[var(--accent-purple)]/15 border border-[var(--accent-purple)]/40 text-[var(--accent-purple)] rounded-2xl hover:bg-[var(--accent-purple)]/25 transition text-sm font-bold">
@@ -404,7 +441,7 @@ export default function Home() {
 
                       {customSaved && (
                         <div className="mb-4 p-3 bg-[#10B981]/10 border border-[#10B981]/30 rounded-2xl text-[#10B981] text-sm font-mono flex items-center gap-2">
-                          <CheckCircle size={16} /> Certificado personalizado guardado. Ahora puedes descargarlo.
+                          <CheckCircle size={16} /> Certificado personalizado guardado en base de datos.
                         </div>
                       )}
 
@@ -412,11 +449,11 @@ export default function Home() {
                         <button onClick={saveCustomCertificate} disabled={savingCustom || !customData.name} className="flex items-center gap-2 px-6 py-3 bg-[var(--accent-cyan)] text-black font-mono font-bold rounded-2xl hover:shadow-cyan-glow transition disabled:opacity-50 text-sm">
                           <span className="flex items-center gap-2">
                             {savingCustom ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                            <span>{savingCustom ? 'IMPLEMENTANDO...' : 'GUARDAR'}</span>
+                            <span>{savingCustom ? 'IMPLEMENTANDO...' : 'GUARDAR CERTIFICADO'}</span>
                           </span>
                         </button>
-                        <button onClick={downloadAllPDFs} disabled={!customSaved} className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition disabled:opacity-40 text-sm font-bold">
-                          <FileText size={16} /> Descargar Ambos PDFs
+                        <button onClick={() => setShowDownloadModal(true)} disabled={!customSaved} className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition disabled:opacity-40 text-sm font-bold">
+                          <FileText size={16} /> Descargar PDFs
                         </button>
                         <button onClick={() => setShowCustomForm(false)} className="flex items-center gap-2 px-5 py-3 bg-transparent border border-white/10 rounded-2xl hover:bg-white/5 transition text-sm">
                           <X size={16} /> Cancelar
@@ -436,6 +473,147 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ─── DOWNLOAD SELECTOR MODAL ─── */}
+      <AnimatePresence>
+        {showDownloadModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="glass-card max-w-md w-full rounded-3xl p-6 border border-white/10 relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 p-4">
+                <button onClick={() => setShowDownloadModal(false)} className="text-[var(--text-secondary)] hover:text-white transition">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 rounded-xl bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/30 flex items-center justify-center mx-auto mb-4 text-[var(--accent-cyan)]">
+                  <FileText size={24} />
+                </div>
+                <h3 className="text-xl font-bold">Opciones de Descarga</h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-1">Selecciona el formato para exportar tus registros de seguridad KVS.</p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={() => { handleDownloadChoice('official'); setShowDownloadModal(false); }}
+                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-[var(--accent-cyan)]/10 hover:border-[var(--accent-cyan)]/30 transition flex justify-between items-center group"
+                >
+                  <div>
+                    <p className="text-sm font-bold group-hover:text-[var(--accent-cyan)] transition">Certificado Oficial (PDF)</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado básico del sistema con firma criptográfica.</p>
+                  </div>
+                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-cyan)]" />
+                </button>
+
+                <button 
+                  onClick={() => { handleDownloadChoice('custom'); setShowDownloadModal(false); }}
+                  disabled={!customSaved}
+                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-[var(--accent-purple)]/10 hover:border-[var(--accent-purple)]/30 disabled:opacity-40 disabled:hover:bg-white/5 disabled:hover:border-white/10 transition flex justify-between items-center group"
+                >
+                  <div>
+                    <p className="text-sm font-bold group-hover:text-[var(--accent-purple)] transition">Certificado Personalizado (PDF)</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado detallado con tus datos de propietario y uso.</p>
+                  </div>
+                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-purple)]" />
+                </button>
+
+                <button 
+                  onClick={() => { handleDownloadChoice('combined'); setShowDownloadModal(false); }}
+                  className="w-full text-left p-4 bg-gradient-to-r from-[var(--accent-cyan)]/5 to-[var(--accent-purple)]/5 border border-white/10 rounded-2xl hover:from-[var(--accent-cyan)]/10 hover:to-[var(--accent-purple)]/10 hover:border-[var(--accent-cyan)]/40 transition flex justify-between items-center group"
+                >
+                  <div>
+                    <p className="text-sm font-bold text-white transition">Certificado Combinado (PDF Único)</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Un solo documento de 2 páginas con ambas variantes oficiales.</p>
+                  </div>
+                  <Download size={16} className="text-[var(--accent-cyan)]" />
+                </button>
+
+                <button 
+                  onClick={() => { handleDownloadChoice('both'); setShowDownloadModal(false); }}
+                  disabled={!customSaved}
+                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-white/5 transition flex justify-between items-center group"
+                >
+                  <div>
+                    <p className="text-sm font-bold group-hover:text-white transition">Descargar Ambos (Separados)</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Descarga simultánea de los dos certificados individuales.</p>
+                  </div>
+                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-white" />
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── TRUST & COMMAND CENTER PANEL ─── */}
+      <div className="w-full max-w-5xl mt-16 relative z-10">
+        <div className="glass-card rounded-3xl p-6 md:p-8 border border-[var(--glass-border)] shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+            <Shield size={250} />
+          </div>
+
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 absolute shrink-0" />
+                <h2 className="text-lg font-bold tracking-widest text-white ml-3">TRUST & COMMAND CENTER</h2>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">Monitoreo de seguridad y telemetría de Kyllerium Visual Signature Engine v3.0.</p>
+            </div>
+            <button 
+              onClick={fetchStats}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition text-[10px] font-mono"
+            >
+              <RefreshCw size={12} /> REFRESH LIVE DATA
+            </button>
+          </div>
+
+          {/* Telemetry Stats Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            {[
+              { label: 'IMÁGENES REGISTRADAS', value: stats.totalAssets, color: 'var(--accent-cyan)' },
+              { label: 'AUTENTICITY CHECKS', value: stats.verificationsCount, color: '#10B981' },
+              { label: 'CERTIFICADOS EMITIDOS', value: stats.certificatesCount, color: 'var(--accent-purple)' },
+              { label: 'SALUD DEL SISTEMA', value: stats.systemHealth, color: '#00E5FF' },
+            ].map(s => (
+              <div key={s.label} className="bg-black/40 border border-white/5 rounded-2xl p-4">
+                <p className="text-[9px] font-mono tracking-wider mb-1" style={{ color: s.color }}>{s.label}</p>
+                <p className="text-2xl font-bold tracking-tight text-white">{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Platform Activity logs */}
+          <div className="bg-black/60 border border-white/5 rounded-2xl p-4">
+            <p className="text-[9px] text-[var(--text-secondary)] font-mono tracking-widest mb-3">BITÁCORA DE ACTIVIDAD EN TIEMPO REAL</p>
+            <div className="flex flex-col gap-2">
+              {stats.activities && stats.activities.map((act: any) => (
+                <div key={act.id} className="flex justify-between items-center text-[10px] font-mono p-2 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${
+                      act.type === 'SIGN' ? 'bg-[var(--accent-cyan)]/15 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/30' :
+                      act.type === 'CHECK' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
+                      'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                    }`}>{act.type}</span>
+                    <span className="text-white font-bold">{act.event}</span>
+                    <span className="text-[var(--text-secondary)] hidden md:inline">— {act.desc}</span>
+                  </div>
+                  <span className="text-[var(--text-secondary)] font-mono text-[9px]">{new Date(act.ts).toLocaleTimeString('es-MX')}</span>
+                </div>
+              ))}
+              {(!stats.activities || stats.activities.length === 0) && (
+                <p className="text-xs font-mono text-[var(--text-secondary)] italic text-center py-4">Estableciendo conexión con el centro de telemetría...</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
