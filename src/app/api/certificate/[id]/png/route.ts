@@ -1,210 +1,149 @@
 // src/app/api/certificate/[id]/png/route.ts
-// Returns a PNG screenshot of the certificate (using pdfkit + canvas-based render)
-// Since canvas isn't available on serverless, we use a creative approach:
-// We return the PDF as a blob with a text/html wrapper that renders as image via CSS print styles,
-// OR we generate a styled HTML-to-canvas PNG inline.
-// Best compatible approach: we use pure node canvas to draw the certificate directly.
+// Generates a PNG image of the certificate using next/og ImageResponse
+import { ImageResponse } from 'next/og';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import QRCode from 'qrcode';
-import { createCanvas, CanvasRenderingContext2D as NodeCtx } from 'canvas';
+import React from 'react';
 
-type Ctx = any;
+export const runtime = 'nodejs';
 
-function drawGradientH(ctx: Ctx, x: number, y: number, w: number, h: number) {
-  const grad = ctx.createLinearGradient(x, y, x + w, y);
-  grad.addColorStop(0, '#00E5FF');
-  grad.addColorStop(1, '#9D4EDD');
-  ctx.fillStyle = grad;
-  ctx.fillRect(x, y, w, h);
-}
+function buildElement(kvsData: any, ownerData: any, isCustom: boolean): React.ReactElement {
+  const kvsId = kvsData.kvs_id || '';
+  const verifyUrl = `kyllerium.com/verify/${kvsId}`;
+  const ts = new Date(kvsData.upload_date || Date.now()).toISOString();
 
-function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number, fill: string, stroke?: string, sw = 1) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-  ctx.fillStyle = fill; ctx.fill();
-  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = sw; ctx.stroke(); }
-}
-
-async function renderCertPng(kvsData: any, ownerData: any, isCustom: boolean): Promise<Buffer> {
-  const W = 1240, H = 1754; // A4 @ 150 dpi
-  const canvas = createCanvas(W, H);
-  const ctx = canvas.getContext('2d') as any;
-
-  // Background
-  ctx.fillStyle = '#080D1A';
-  ctx.fillRect(0, 0, W, H);
-
-  // Grid
-  ctx.strokeStyle = 'rgba(0,229,255,0.05)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= W; i += 80) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, H); ctx.stroke(); }
-  for (let j = 0; j <= H; j += 80) { ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(W, j); ctx.stroke(); }
-
-  // Outer border
-  ctx.strokeStyle = '#1E2D4A'; ctx.lineWidth = 2;
-  ctx.strokeRect(24, 24, W - 48, H - 48);
-
-  // Inner glow border
-  ctx.strokeStyle = 'rgba(0,229,255,0.2)'; ctx.lineWidth = 1;
-  ctx.strokeRect(34, 34, W - 68, H - 68);
-
-  // Cyan corner accents
-  const corner = (x: number, y: number, dx: number, dy: number) => {
-    ctx.beginPath(); ctx.strokeStyle = '#00E5FF'; ctx.lineWidth = 4;
-    ctx.moveTo(x, y + dy * 40); ctx.lineTo(x, y); ctx.lineTo(x + dx * 40, y);
-    ctx.stroke();
-  };
-  corner(26, 26, 1, 1); corner(W - 26, 26, -1, 1);
-  corner(26, H - 26, 1, -1); corner(W - 26, H - 26, -1, -1);
-
-  // Top gradient bar
-  drawGradientH(ctx, 40, 40, W - 80, 6);
-
-  // Title
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 36px sans-serif';
-  ctx.fillText('KYLLERIUM VISUAL SIGNATURE', 60, 110);
-
-  ctx.fillStyle = '#00E5FF';
-  ctx.font = '18px monospace';
-  ctx.fillText('KYLLERIUM VISUAL SIGNATURE ENGINE  ·  VERSION 3.0', 60, 142);
-
-  ctx.fillStyle = '#9D4EDD';
-  ctx.font = '16px monospace';
-  ctx.fillText(isCustom ? '★  CERTIFICADO DE AUTENTICIDAD PERSONALIZADO  ★' : '★  CERTIFICADO OFICIAL DEL SISTEMA  ★', 60, 168);
-
-  // Divider
-  ctx.strokeStyle = '#1E2D4A'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(40, 184); ctx.lineTo(W - 40, 184); ctx.stroke();
-
-  // Status badge
-  roundRect(ctx, 40, 196, W - 80, 52, 10, '#051409', '#10B981', 1.5);
-  ctx.fillStyle = '#10B981'; ctx.beginPath(); ctx.arc(70, 222, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#10B981'; ctx.font = 'bold 18px monospace';
-  ctx.fillText('✓  VERIFIED SECURE  ·  REGISTERED IN KYLLERIUM REGISTRY  ·  ENGINE V3.0', 88, 228);
-
-  // Data rows
-  const rowFn = (label: string, value: string, valColor: string, y: number) => {
-    ctx.fillStyle = '#64748B'; ctx.font = '15px monospace';
-    ctx.fillText(label.toUpperCase(), 40, y);
-    ctx.fillStyle = valColor; ctx.font = '16px monospace';
-    ctx.fillText(value, 280, y);
-  };
-
-  let curY = 290;
-  // Section header
-  ctx.fillStyle = '#00E5FF'; ctx.fillRect(40, curY - 14, 6, 22);
-  ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 17px sans-serif';
-  ctx.fillText('IMAGE METADATA & REGISTRY IDENTIFIERS', 54, curY);
-  ctx.strokeStyle = '#1E2D4A'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(40, curY + 12); ctx.lineTo(W - 40, curY + 12); ctx.stroke();
-  curY += 36;
-
-  rowFn('KVS Registry ID', kvsData.kvs_id, '#00E5FF', curY); curY += 30;
-  rowFn('KVS Fingerprint', kvsData.kvs_fingerprint || 'KVS-FP-NOT-GENERATED', '#9D4EDD', curY); curY += 30;
-  rowFn('SHA-256 Hash', kvsData.hash_sha256 || 'Pending', '#CBD5E1', curY); curY += 30;
-  rowFn('Owner', ownerData?.name || 'Kyllerium System', '#FFFFFF', curY); curY += 30;
-  if (ownerData?.organization) { rowFn('Organization', ownerData.organization, '#FFFFFF', curY); curY += 30; }
-  if (ownerData?.role) { rowFn('Role', ownerData.role, '#FFFFFF', curY); curY += 30; }
-  if (isCustom && ownerData?.expirationDate) { rowFn('Valid Until', ownerData.expirationDate, '#EF4444', curY); curY += 30; }
-  if (isCustom && ownerData?.usageDescription) { rowFn('Authorized Usage', ownerData.usageDescription, '#10B981', curY); curY += 30; }
-  rowFn('Timestamp (UTC)', new Date(kvsData.upload_date || Date.now()).toISOString(), '#94A3B8', curY); curY += 46;
-
-  // Section header: C2PA
-  ctx.fillStyle = '#00E5FF'; ctx.fillRect(40, curY - 14, 6, 22);
-  ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 17px sans-serif';
-  ctx.fillText('C2PA CRYPTOGRAPHIC SECURITY BINDING', 54, curY);
-  ctx.strokeStyle = '#1E2D4A'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(40, curY + 12); ctx.lineTo(W - 40, curY + 12); ctx.stroke();
-  curY += 36;
-
-  let c2paStatus = 'NOT SIGNED';
-  if (kvsData.c2pa_manifest) {
-    try {
-      const p = JSON.parse(kvsData.c2pa_manifest);
-      if (p && !p.error) c2paStatus = 'ACTIVE & SECURED IN IMAGE CONTAINER';
-    } catch { /* ignore */ }
-  }
-  rowFn('C2PA Status', c2paStatus, c2paStatus.startsWith('ACTIVE') ? '#10B981' : '#F59E0B', curY); curY += 30;
-  rowFn('Binding Date', new Date(kvsData.upload_date || Date.now()).toISOString(), '#00E5FF', curY); curY += 46;
-
-  // Section header: Layers
-  ctx.fillStyle = '#00E5FF'; ctx.fillRect(40, curY - 14, 6, 22);
-  ctx.fillStyle = '#E2E8F0'; ctx.font = 'bold 17px sans-serif';
-  ctx.fillText('ACTIVE PROVENANCE & SECURITY LAYERS', 54, curY);
-  ctx.strokeStyle = '#1E2D4A'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(40, curY + 12); ctx.lineTo(W - 40, curY + 12); ctx.stroke();
-  curY += 36;
-
-  let layers = { dct: true, lsb: true, exif: true, c2pa: true };
+  let layers: any = { dct: true, lsb: true, exif: true, c2pa: true };
   try {
     const p = JSON.parse(kvsData.watermark_data || '{}');
     if (p.layers) layers = p.layers;
   } catch { /* ignore */ }
 
-  const layerDefs = [
-    { name: 'DCT', active: !!layers.dct },
-    { name: 'LSB', active: !!layers.lsb },
-    { name: 'EXIF/XMP', active: !!layers.exif },
-    { name: 'C2PA', active: !!layers.c2pa },
+  const rows: { label: string; value: string; color: string }[] = [
+    { label: 'KVS REGISTRY ID', value: kvsId, color: '#00E5FF' },
+    { label: 'KVS FINGERPRINT', value: (kvsData.kvs_fingerprint || 'KVS-FP-NOT-GENERATED').substring(0, 52), color: '#9D4EDD' },
+    { label: 'REGISTERED OWNER', value: ownerData?.name || 'Kyllerium System', color: '#FFFFFF' },
   ];
-  const colW = (W - 80) / 2;
-  layerDefs.forEach((l, i) => {
-    const lx = 40 + (i % 2) * (colW + 8);
-    const ly = curY + Math.floor(i / 2) * 44;
-    roundRect(ctx, lx, ly, colW - 8, 36, 6, l.active ? '#0A1A0F' : '#0D1117', l.active ? '#10B981' : '#1E2D4A', 1.5);
-    ctx.fillStyle = l.active ? '#10B981' : '#334155';
-    ctx.beginPath(); ctx.arc(lx + 20, ly + 18, 7, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = l.active ? '#FFFFFF' : '#475569'; ctx.font = 'bold 15px monospace';
-    ctx.fillText(l.name, lx + 36, ly + 23);
-  });
+  if (ownerData?.organization) rows.push({ label: 'ORGANIZATION', value: ownerData.organization, color: '#FFFFFF' });
+  if (ownerData?.role) rows.push({ label: 'ROLE / TITLE', value: ownerData.role, color: '#FFFFFF' });
+  if (isCustom && ownerData?.expirationDate) rows.push({ label: 'VALID UNTIL', value: ownerData.expirationDate, color: '#EF4444' });
+  if (isCustom && ownerData?.usageDescription) rows.push({ label: 'AUTHORIZED USAGE', value: ownerData.usageDescription, color: '#10B981' });
+  rows.push({ label: 'TIMESTAMP (UTC)', value: ts, color: '#94A3B8' });
 
-  curY += 100;
+  const layerDefs = [
+    { name: 'DCT', active: !!layers.dct, desc: 'Spread-spectrum watermark' },
+    { name: 'LSB', active: !!layers.lsb, desc: 'LSB steganography' },
+    { name: 'EXIF/XMP', active: !!layers.exif, desc: 'Metadata binding' },
+    { name: 'C2PA', active: !!layers.c2pa, desc: 'COSE crypto signature' },
+  ];
 
-  // QR Code
-  const verifyUrl = `https://kyllerium.com/verify/${kvsData.kvs_id}`;
-  const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
-    color: { dark: '#00E5FF', light: '#00000000' },
-    width: 130,
-    margin: 1
-  });
+  return React.createElement('div', {
+    style: {
+      width: 1240, height: 1754, background: '#080D1A',
+      display: 'flex', flexDirection: 'column', fontFamily: 'sans-serif', position: 'relative',
+    }
+  },
+    // Outer border
+    React.createElement('div', { style: { position: 'absolute', inset: 20, border: '1.5px solid #1E2D4A' } }),
+    React.createElement('div', { style: { position: 'absolute', inset: 28, border: '0.5px solid rgba(0,229,255,0.2)' } }),
 
-  const footerTop = H - 160;
-  ctx.strokeStyle = '#1E2D4A'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(40, footerTop); ctx.lineTo(W - 40, footerTop); ctx.stroke();
+    // Corner accents
+    React.createElement('div', { style: { position: 'absolute', top: 22, left: 22, width: 36, height: 36, borderTop: '3px solid #00E5FF', borderLeft: '3px solid #00E5FF' } }),
+    React.createElement('div', { style: { position: 'absolute', top: 22, right: 22, width: 36, height: 36, borderTop: '3px solid #00E5FF', borderRight: '3px solid #00E5FF' } }),
+    React.createElement('div', { style: { position: 'absolute', bottom: 22, left: 22, width: 36, height: 36, borderBottom: '3px solid #00E5FF', borderLeft: '3px solid #00E5FF' } }),
+    React.createElement('div', { style: { position: 'absolute', bottom: 22, right: 22, width: 36, height: 36, borderBottom: '3px solid #00E5FF', borderRight: '3px solid #00E5FF' } }),
 
-  // Bottom gradient bar
-  drawGradientH(ctx, 40, H - 30, W - 80, 5);
+    // Top gradient bar
+    React.createElement('div', { style: { position: 'absolute', top: 36, left: 36, right: 36, height: 5, background: 'linear-gradient(to right, #00E5FF, #9D4EDD)' } }),
 
-  // QR
-  const qrImg = await new Promise<any>((resolve, reject) => {
-    const { Image } = require('canvas');
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = qrDataUrl;
-  });
-  ctx.drawImage(qrImg, W - 180, footerTop + 10, 130, 130);
+    // Bottom gradient bar
+    React.createElement('div', { style: { position: 'absolute', bottom: 28, left: 36, right: 36, height: 4, background: 'linear-gradient(to right, #00E5FF, #9D4EDD)' } }),
 
-  // Footer text
-  ctx.fillStyle = '#94A3B8'; ctx.font = 'bold 15px monospace';
-  ctx.fillText('CERTIFICATE SECURED BY KYLLERIUM CORPORATION', 40, footerTop + 28);
-  ctx.fillStyle = '#475569'; ctx.font = '13px sans-serif';
-  ctx.fillText('This document certifies that the corresponding digital asset has been', 40, footerTop + 52);
-  ctx.fillText('securely registered in the Kyllerium system with military-grade invisible', 40, footerTop + 70);
-  ctx.fillText('watermarking and cryptographic C2PA provenance signatures.', 40, footerTop + 88);
-  ctx.fillStyle = '#00E5FF'; ctx.font = '14px monospace';
-  ctx.fillText(`Verify: kyllerium.com/verify/${kvsData.kvs_id}`, 40, footerTop + 116);
-  ctx.fillStyle = '#334155'; ctx.font = '12px monospace';
-  ctx.fillText(`KVSE v3.0  ·  ${new Date().getFullYear()} Kyllerium Corp`, 40, footerTop + 138);
+    // Content area
+    React.createElement('div', { style: { display: 'flex', flexDirection: 'column', padding: '56px 56px 48px', flex: 1 } },
+      // Header row
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 20, marginBottom: 12 } },
+        React.createElement('div', { style: { width: 56, height: 56, border: '2px solid #00E5FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00E5FF', fontSize: 14, fontFamily: 'monospace' } }, 'KVS'),
+        React.createElement('div', { style: { display: 'flex', flexDirection: 'column' } },
+          React.createElement('div', { style: { color: '#FFFFFF', fontSize: 30, fontWeight: 700, letterSpacing: 3 } }, 'KYLLERIUM VISUAL SIGNATURE'),
+          React.createElement('div', { style: { color: '#00E5FF', fontSize: 13, fontFamily: 'monospace', letterSpacing: 2, marginTop: 4 } }, 'KYLLERIUM VISUAL SIGNATURE ENGINE  -  VERSION 3.0'),
+        )
+      ),
+      React.createElement('div', { style: { color: '#9D4EDD', fontSize: 12, fontFamily: 'monospace', letterSpacing: 2, marginBottom: 16 } },
+        isCustom ? '*  CERTIFICADO DE AUTENTICIDAD PERSONALIZADO  *' : '*  CERTIFICADO OFICIAL DEL SISTEMA  *'
+      ),
 
-  return canvas.toBuffer('image/png');
+      // Divider
+      React.createElement('div', { style: { height: 1, background: '#1E2D4A', marginBottom: 16 } }),
+
+      // Status badge
+      React.createElement('div', {
+        style: {
+          display: 'flex', alignItems: 'center', gap: 12, background: '#051409',
+          border: '1.5px solid #10B981', borderRadius: 8, padding: '12px 20px', marginBottom: 24
+        }
+      },
+        React.createElement('div', { style: { width: 12, height: 12, borderRadius: '50%', background: '#10B981' } }),
+        React.createElement('div', { style: { color: '#10B981', fontSize: 14, fontFamily: 'monospace', letterSpacing: 1 } },
+          'OK  VERIFIED SECURE  -  REGISTERED IN KYLLERIUM REGISTRY  -  ENGINE V3.0'
+        )
+      ),
+
+      // Section: Metadata
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 } },
+        React.createElement('div', { style: { width: 5, height: 20, background: '#00E5FF' } }),
+        React.createElement('div', { style: { color: '#E2E8F0', fontSize: 14, fontWeight: 700, letterSpacing: 1 } }, 'IMAGE METADATA & REGISTRY IDENTIFIERS')
+      ),
+      React.createElement('div', { style: { height: 1, background: '#1E2D4A', marginBottom: 12 } }),
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 } },
+        ...rows.map((r, i) =>
+          React.createElement('div', { key: i, style: { display: 'flex', gap: 0 } },
+            React.createElement('div', { style: { color: '#64748B', fontSize: 11, fontFamily: 'monospace', width: 230 } }, r.label),
+            React.createElement('div', { style: { color: r.color, fontSize: 12, fontFamily: 'monospace', flex: 1 } }, r.value)
+          )
+        )
+      ),
+
+      // Section: Layers
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 } },
+        React.createElement('div', { style: { width: 5, height: 20, background: '#00E5FF' } }),
+        React.createElement('div', { style: { color: '#E2E8F0', fontSize: 14, fontWeight: 700, letterSpacing: 1 } }, 'ACTIVE PROVENANCE & SECURITY LAYERS')
+      ),
+      React.createElement('div', { style: { height: 1, background: '#1E2D4A', marginBottom: 12 } }),
+      React.createElement('div', { style: { display: 'flex', gap: 12, marginBottom: 24 } },
+        ...layerDefs.map((l) =>
+          React.createElement('div', {
+            key: l.name,
+            style: {
+              flex: 1, display: 'flex', flexDirection: 'column', gap: 4,
+              background: l.active ? '#0A1A0F' : '#0D1117',
+              border: `1.5px solid ${l.active ? '#10B981' : '#1E2D4A'}`,
+              borderRadius: 8, padding: '10px 14px'
+            }
+          },
+            React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+              React.createElement('div', { style: { width: 8, height: 8, borderRadius: '50%', background: l.active ? '#10B981' : '#334155' } }),
+              React.createElement('div', { style: { color: l.active ? '#FFFFFF' : '#475569', fontSize: 13, fontWeight: 700, fontFamily: 'monospace' } }, l.name)
+            ),
+            React.createElement('div', { style: { color: l.active ? '#94A3B8' : '#334155', fontSize: 10, fontFamily: 'monospace' } }, l.desc)
+          )
+        )
+      ),
+
+      // Spacer
+      React.createElement('div', { style: { flex: 1 } }),
+
+      // Footer
+      React.createElement('div', { style: { height: 1, background: '#1E2D4A', marginBottom: 16 } }),
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+        React.createElement('div', { style: { color: '#94A3B8', fontSize: 12, fontFamily: 'monospace', fontWeight: 700 } }, 'CERTIFICATE SECURED BY KYLLERIUM CORPORATION'),
+        React.createElement('div', { style: { color: '#475569', fontSize: 10 } },
+          'This document certifies that the digital asset has been securely registered in the Kyllerium system with military-grade invisible watermarking and cryptographic C2PA provenance signatures.'
+        ),
+        React.createElement('div', { style: { color: '#00E5FF', fontSize: 11, fontFamily: 'monospace', marginTop: 4 } }, `Verify: ${verifyUrl}`),
+        React.createElement('div', { style: { color: '#334155', fontSize: 10, fontFamily: 'monospace' } }, `KVSE v3.0  -  ${new Date().getFullYear()} Kyllerium Corp  -  All rights reserved`)
+      )
+    )
+  );
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -225,13 +164,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const isCustom = type === 'custom';
-    const pngBuffer = await renderCertPng(record, ownerData, isCustom);
 
-    return new Response(pngBuffer, {
+    const imageResponse = new ImageResponse(
+      buildElement(record, ownerData, isCustom),
+      { width: 1240, height: 1754 }
+    );
+
+    const bytes = await imageResponse.arrayBuffer();
+    return new Response(bytes, {
       headers: {
         'Content-Type': 'image/png',
         'Content-Disposition': `attachment; filename="KVS-${isCustom ? 'Custom' : 'Official'}-${id}.png"`,
-        'Content-Length': String(pngBuffer.length),
+        'Content-Length': String(bytes.byteLength),
       }
     });
   } catch (error: any) {
