@@ -4,6 +4,7 @@ import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import NavBar from "./components/NavBar";
 import ScreenEdgeGlow from "./components/ScreenEdgeGlow";
+import WelcomeSplash from "./components/WelcomeSplash";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space" });
@@ -24,6 +25,7 @@ export default function RootLayout({
         className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased min-h-screen flex flex-col`}
       >
         <ScreenEdgeGlow />
+        <WelcomeSplash />
         <NavBar />
         <main className="flex-grow flex flex-col">{children}</main>
         <footer className="py-8 text-center text-xs text-[var(--text-secondary)] border-t border-[var(--glass-border)] bg-[var(--bg-secondary)]/70 backdrop-blur-md">

@@ -20,7 +20,7 @@ export async function embedMetadata(imageBuffer: Buffer, payload: MetadataPayloa
     "0th": {
       [piexif.ImageIFD.Artist]: payload.ownerName || "Kyllerium Corporation",
       [piexif.ImageIFD.Copyright]: `© ${payload.year} ${payload.ownerName || 'Kyllerium Corporation'}. All rights reserved.`,
-      [piexif.ImageIFD.Software]: "Kyllerium Visual Signature Engine v2.0",
+      [piexif.ImageIFD.Software]: "Kyllerium Visual Signature Engine v3.0",
       [piexif.ImageIFD.ImageDescription]: `KVS-ID: ${payload.kvsId} | Owner: ${payload.ownerName || 'Kyllerium System'}.`,
       [piexif.ImageIFD.DateTime]: new Date().toISOString(),
     },

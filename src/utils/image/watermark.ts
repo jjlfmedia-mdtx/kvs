@@ -1,8 +1,27 @@
 import sharp from 'sharp';
+import crypto from 'crypto';
 
 const N = 8;
 const COEFF_INDEX = 9;
 const DCT_MIN_MAGNITUDE = 20;
+
+// Derive a static KVS master key for encryption/decryption (falls back if env not set)
+const KVS_SECRET = process.env.KVS_SECRET || 'kvse-military-grade-super-secret-key-3.0';
+
+/** Ciphers payload text using AES-256-GCM and returns a compact hex string containing IV, authTag, and ciphertext */
+function encryptPayload(text: string): string {
+  const iv = crypto.randomBytes(12);
+  // Derive key via PBKDF2 to get exactly 32 bytes
+  const key = crypto.pbkdf2Sync(KVS_SECRET, 'kvs-salt-v3.0', 10000, 32, 'sha256');
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag().toString('hex');
+  
+  // Format: iv(24hex):authTag(32hex):ciphertext
+  return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
 
 const cosineCache = new Float64Array(N * N);
 for (let u = 0; u < N; u++) {
@@ -54,8 +73,9 @@ function embedDCTInRaw(
   kvsId: string,
   maxPixelDelta: number
 ): boolean {
-  const standardText = `KVS:${kvsId}`;
-  const payloadBits = standardText.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join('');
+  // Encrypt the KVS identifier to prevent inspection of the frequency coefficient magnitude
+  const encryptedText = encryptPayload(`KVS:${kvsId}`);
+  const payloadBits = encryptedText.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join('');
   const blockWidths = Math.floor(width / N);
   const blockHeights = Math.floor(height / N);
   const totalBlocks = blockWidths * blockHeights;
@@ -118,7 +138,9 @@ function embedDCTInRaw(
 
 function embedLSBInRaw(raw: Buffer, payload: unknown): boolean {
   const payloadStr = JSON.stringify(payload);
-  const payloadBits = payloadStr.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join('');
+  // Encrypt the LSB payload with AES-256-GCM before embedding
+  const encryptedPayloadStr = encryptPayload(payloadStr);
+  const payloadBits = encryptedPayloadStr.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join('');
   const fullBits = payloadBits + '00000000';
   if (fullBits.length > raw.length) return false;
 

@@ -67,7 +67,7 @@ export async function signWithC2PA(
     const organization = ownerData?.organization || 'Kyllerium Corporation';
 
     const manifestDef = {
-      claim_generator: 'Kyllerium Visual Signature Engine/2.0 (https://kyllerium.com)',
+      claim_generator: 'Kyllerium Visual Signature Engine/3.0 (https://kyllerium.com)',
       title: `KVS Asset ${kvsData?.kvs_id}`,
       format: mimeType,
       assertions: [
@@ -77,7 +77,7 @@ export async function signWithC2PA(
             actions: [{
               action: 'c2pa.created',
               when: new Date().toISOString(),
-              softwareAgent: 'Kyllerium Visual Signature Engine/2.0'
+              softwareAgent: 'Kyllerium Visual Signature Engine/3.0'
             }]
           }
         },
@@ -102,7 +102,7 @@ export async function signWithC2PA(
           label: 'com.kyllerium.kvs',
           data: {
             kvs_id: kvsData?.kvs_id,
-            engine_version: '2.0',
+            engine_version: '3.0',
             watermark_layers: ['DCT', 'LSB', 'EXIF', 'C2PA'],
             verification_url: `https://kyllerium.com/verify/${kvsData?.kvs_id}`,
             issued_at: new Date().toISOString(),
