@@ -12,7 +12,7 @@ export default function NavBar() {
   const links = [
     { href: "/", label: "Authenticate" },
     { href: "/verify", label: "Verify" },
-    { href: "/download", label: "Download App" },
+
   ];
 
   const isActive = (href: string) =>

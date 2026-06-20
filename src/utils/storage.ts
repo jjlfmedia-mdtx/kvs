@@ -41,7 +41,13 @@ export async function saveImageFile(buffer: Buffer, filename: string, mimeType: 
     return `${supabaseUrl}/storage/v1/object/public/${supabaseBucket}/${filename}`;
   }
 
-  if (process.env.VERCEL || process.env.VERCEL_ENV) {
+  // Only block on actual Vercel cloud deployments (production or preview).
+  // Local dev (`vercel dev` or `npm run dev`) sets VERCEL_ENV=development but
+  // still has a writable filesystem, so we allow local disk in that case.
+  const isVercelCloud =
+    (process.env.VERCEL || process.env.VERCEL_ENV) &&
+    process.env.VERCEL_ENV !== 'development';
+  if (isVercelCloud) {
     throw new Error('Vercel environment detected but SUPABASE_URL is missing. Local disk storage is not allowed on Vercel (/var/task/uploads is read-only).');
   }
 
