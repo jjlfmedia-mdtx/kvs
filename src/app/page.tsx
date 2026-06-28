@@ -94,7 +94,6 @@ export default function Home() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },
-    maxSize: 4.5 * 1024 * 1024,
     multiple: false
   });
 
@@ -111,8 +110,60 @@ export default function Home() {
     if (!file) return;
     setStatus('uploading');
     setProgressMsg(steps[0]);
+
+    let finalFile = file;
+
+    // Si el archivo supera 4MB, lo comprimimos/redimensionamos en cliente para evitar fallos de red por límite de tamaño
+    if (file.size > 4 * 1024 * 1024) {
+      setProgressMsg('Comprimiendo imagen de alta resolución...');
+      try {
+        finalFile = await new Promise<File>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              let width = img.width;
+              let height = img.height;
+              const maxDim = 2500;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              canvas.width = width;
+              canvas.height = height;
+              ctx?.drawImage(img, 0, 0, width, height);
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  const compressedFile = new File([blob], file.name, {
+                    type: 'image/jpeg',
+                    lastModified: Date.now()
+                  });
+                  resolve(compressedFile);
+                } else {
+                  reject(new Error('Canvas blob failed'));
+                }
+              }, 'image/jpeg', 0.88); // 88% calidad para optimizar sin arruinar marcas de agua posteriores
+            };
+            img.onerror = () => reject(new Error('Img loading failed'));
+          };
+          reader.onerror = () => reject(new Error('File reading failed'));
+        });
+      } catch (e: any) {
+        console.warn('[Upload client compression failed, proceeding raw]', e);
+      }
+    }
+
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', finalFile);
 
     steps.forEach((s, i) => {
       if (i > 0) setTimeout(() => setProgressMsg(s), i * 800);

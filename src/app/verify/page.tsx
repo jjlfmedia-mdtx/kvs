@@ -36,7 +36,6 @@ export default function VerifyPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },
-    maxSize: 4.5 * 1024 * 1024,
     multiple: false
   });
 
@@ -48,8 +47,60 @@ export default function VerifyPage() {
     setProgressMsg(verifySteps[0]);
     verifySteps.forEach((s, i) => { if (i > 0) setTimeout(() => setProgressMsg(s), i * 700); });
 
+    let finalFile = fileToVerify;
+
+    // Si el archivo supera 4MB, lo redimensionamos/comprimimos en cliente usando canvas para evitar el error de red serverless
+    if (fileToVerify.size > 4 * 1024 * 1024) {
+      setProgressMsg('Comprimiendo imagen pesada para verificar...');
+      try {
+        finalFile = await new Promise<File>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(fileToVerify);
+          reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              // Reducimos las dimensiones ligeramente si es muy gigante
+              let width = img.width;
+              let height = img.height;
+              const maxDim = 2500;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              canvas.width = width;
+              canvas.height = height;
+              ctx?.drawImage(img, 0, 0, width, height);
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  const compressedFile = new File([blob], fileToVerify.name, {
+                    type: 'image/jpeg',
+                    lastModified: Date.now()
+                  });
+                  resolve(compressedFile);
+                } else {
+                  reject(new Error('Canvas blob generation failed'));
+                }
+              }, 'image/jpeg', 0.85); // 85% calidad para conservar DCT robusto y pHash
+            };
+            img.onerror = () => reject(new Error('Failed to load image into canvas'));
+          };
+          reader.onerror = () => reject(new Error('Failed to read file'));
+        });
+      } catch (e: any) {
+        console.warn('[Verify client compression failed, proceeding raw]', e);
+      }
+    }
+
     const formData = new FormData();
-    formData.append('file', fileToVerify);
+    formData.append('file', finalFile);
     try {
       const res = await fetch('/api/verify', { method: 'POST', body: formData });
       let data: any;
@@ -69,8 +120,19 @@ export default function VerifyPage() {
     }
   };
 
-  const overallColor = result?.overall === 'VERIFIED' ? '#10B981' : result?.overall === 'MODIFIED' ? '#F59E0B' : '#EF4444';
-  const OverallIcon = result?.overall === 'VERIFIED' ? ShieldCheck : result?.overall === 'MODIFIED' ? ShieldAlert : ShieldX;
+  const overallColor =
+    result?.overall === 'VERIFIED' || result?.overall === 'VERIFIED_COMPRESSED'
+      ? '#10B981'
+      : result?.overall === 'MODIFIED'
+      ? '#F59E0B'
+      : '#EF4444';
+      
+  const OverallIcon =
+    result?.overall === 'VERIFIED' || result?.overall === 'VERIFIED_COMPRESSED'
+      ? ShieldCheck
+      : result?.overall === 'MODIFIED'
+      ? ShieldAlert
+      : ShieldX;
 
   return (
     <div className="min-h-[85vh] flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden">
@@ -155,9 +217,19 @@ export default function VerifyPage() {
                 </div>
                 <div className="flex-grow">
                   <h2 className="text-2xl font-bold tracking-widest" style={{ color: overallColor }}>
-                    {result.overall === 'VERIFIED' ? 'VERIFICADO' : result.overall === 'MODIFIED' ? 'MODIFICADO' : 'NO AUTÉNTICO'}
+                    {result.overall === 'VERIFIED' ? 'VERIFICADO' : result.overall === 'VERIFIED_COMPRESSED' ? 'AUTÉNTICO (CON COMPRESIÓN)' : result.overall === 'MODIFIED' ? 'MODIFICADO' : 'NO AUTÉNTICO'}
                   </h2>
-                  <p className="text-sm font-mono opacity-70">CONFIANZA: {result.confidence}% · {result.overall === 'VERIFIED' ? 'Imagen auténtica del registro KVS' : result.overall === 'MODIFIED' ? 'La imagen fue alterada después de protegerse' : 'No se encontraron credenciales KVS'}</p>
+                  <p className="text-sm font-mono opacity-70">
+                    CONFIANZA: {result.confidence}% · {
+                      result.overall === 'VERIFIED'
+                        ? 'Imagen auténtica del registro KVS (archivo original e íntegro)'
+                        : result.overall === 'VERIFIED_COMPRESSED'
+                        ? 'Imagen auténtica (pasó por redes sociales o compresión, marcas robustas intactas)'
+                        : result.overall === 'MODIFIED'
+                        ? 'La estructura de la imagen fue alterada tras protegerse'
+                        : 'No se encontraron huellas ni registros KVS en esta imagen'
+                    }
+                  </p>
                 </div>
                 {result.db_record && (
                   <a href={`/api/certificate/${result.db_record.kvs_id}`} target="_blank" className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition text-xs font-bold">

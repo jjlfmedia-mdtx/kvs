@@ -151,9 +151,19 @@ export async function POST(req: Request) {
         results.overall = 'VERIFIED';
         results.confidence = 100; // Perfect match is 100% authentic
       } else {
-        // Record exists, but SHA-256 hash changed -> MODIFIED!
-        results.overall = 'MODIFIED';
-        results.confidence = Math.max(50, Math.min(95, results.confidence));
+        // El hash no coincide exactamente, pero la imagen existe en la DB.
+        // Si el pHash es muy cercano o se recuperó el DCT robusto, indica autenticidad preservada bajo compresión (Redes Sociales).
+        const hasRobustIndicators = (results.phash_match?.found && results.phash_match.distance < 10) || results.dct_watermark?.found;
+        
+        if (hasRobustIndicators) {
+          results.overall = 'VERIFIED_COMPRESSED';
+          // Estimamos una confianza alta ya que pasó los filtros robustos de imagen
+          results.confidence = Math.max(80, Math.min(95, results.confidence + 20));
+        } else {
+          // Si no tiene coincidencia de pHash ni DCT, probablemente ha sido alterada o manipulada significativamente.
+          results.overall = 'MODIFIED';
+          results.confidence = Math.max(30, Math.min(75, results.confidence));
+        }
       }
     } else {
       results.overall = 'NOT_AUTHENTIC';
