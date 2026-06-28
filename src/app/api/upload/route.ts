@@ -89,7 +89,11 @@ export async function POST(req: Request) {
     } catch (e: any) { console.warn('[EXIF]', e?.message); layers.exif = false; }
 
     // ── Layer 4: C2PA signing (COSE manifest, readable by Adobe verifier) ─
-    const c2paResult = await signWithC2PA(processedBuffer as any, type.mime, { kvs_id: kvsId }, { name: ownerName });
+    // Re-detect the actual MIME type from the processed buffer — watermark/EXIF
+    // encoding steps can change the format (e.g. PNG→JPEG after canvas compression),
+    // so using the original type.mime may cause a fatal mimeType mismatch in c2pa-node.
+    const actualType = getMimeType(processedBuffer as any) ?? type;
+    const c2paResult = await signWithC2PA(processedBuffer as any, actualType.mime, { kvs_id: kvsId }, { name: ownerName });
     processedBuffer = c2paResult.buffer as any;
     layers.c2pa = c2paResult.injected;
 
@@ -104,9 +108,10 @@ export async function POST(req: Request) {
 
     // ── Save image (dynamic hybrid storage: Supabase or Disk) ───────────────
     const originalName = sanitize(file.name);
-    const ext = path.extname(originalName) || `.${type.ext}`;
+    // Use the actual final format extension (buffer may have been re-encoded)
+    const ext = `.${actualType.ext}`;
     const filename = `KVS-${kvsId}${ext}`;
-    const filepath = await saveImageFile(processedBuffer as any, filename, type.mime);
+    const filepath = await saveImageFile(processedBuffer as any, filename, actualType.mime);
 
     // ── Save to DB ─────────────────────────────────────────────────────────
     const imageRecord = await prisma.image.create({
