@@ -118,11 +118,7 @@ export async function signWithC2PA(
     const signedAssetResult = await c2pa.sign({
       asset: { buffer: imageBuffer, mimeType: mimeType as any },
       manifest: manifest,
-      signer,
-      options: {
-        // Servidor de Sellado de Tiempo (RFC 3161) público para cumplir con la especificación de Adobe C2PA
-        tsa: 'http://timestamp.digicert.com'
-      }
+      signer
     });
 
     const out = signedAssetResult as any;
