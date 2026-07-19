@@ -6,6 +6,8 @@ import { computePHash } from '@/utils/image/phash';
 import { embedMetadata } from '@/utils/image/metadata';
 import { signWithC2PA } from '@/utils/crypto/c2pa';
 import { computeSHA256 } from '@/utils/crypto/hash';
+import { verifyJWT } from '@/utils/crypto/jwt';
+import { cookies } from 'next/headers';
 import sanitize from 'sanitize-filename';
 import path from 'path';
 import crypto from 'crypto';
@@ -114,13 +116,12 @@ export async function POST(req: Request) {
     const filename = `KVS-${kvsId}${ext}`;
     const filepath = await saveImageFile(processedBuffer as any, filename, actualType.mime);
 
-    // ── Get authenticated user from session cookie ────────────────────────
+    // ── Get authenticated user from session cookie ────────────────────
     let authUserId: string | null = null;
     try {
-      const cookieStore = await require('next/headers').cookies();
+      const cookieStore = await cookies();
       const token = cookieStore.get('kvs_session')?.value;
       if (token) {
-        const { verifyJWT } = require('@/utils/crypto/jwt');
         const payload = await verifyJWT(token);
         if (payload) {
           authUserId = payload.userId;
