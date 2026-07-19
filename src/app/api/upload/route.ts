@@ -107,11 +107,28 @@ export async function POST(req: Request) {
     const kvsFingerprint = generateKVSFingerprint(finalHash, kvsId);
 
     // ── Save image (dynamic hybrid storage: Supabase or Disk) ───────────────
+    // ── Save image (dynamic hybrid storage: Supabase or Disk) ───────────────
     const originalName = sanitize(file.name);
     // Use the actual final format extension (buffer may have been re-encoded)
     const ext = `.${actualType.ext}`;
     const filename = `KVS-${kvsId}${ext}`;
     const filepath = await saveImageFile(processedBuffer as any, filename, actualType.mime);
+
+    // ── Get authenticated user from session cookie ────────────────────────
+    let authUserId: string | null = null;
+    try {
+      const cookieStore = await require('next/headers').cookies();
+      const token = cookieStore.get('kvs_session')?.value;
+      if (token) {
+        const { verifyJWT } = require('@/utils/crypto/jwt');
+        const payload = await verifyJWT(token);
+        if (payload) {
+          authUserId = payload.userId;
+        }
+      }
+    } catch (cookieErr) {
+      console.warn('[KVS Upload] Failed to read session cookie:', cookieErr);
+    }
 
     // ── Save to DB ─────────────────────────────────────────────────────────
     const imageRecord = await prisma.image.create({
@@ -126,6 +143,7 @@ export async function POST(req: Request) {
         metadata_json: JSON.stringify({ type: type.mime, layers, c2pa: c2paResult.manifestSummary }),
         c2pa_manifest: c2paResult.manifestSummary,
         owner_name: ownerName,
+        userId: authUserId // Asociado inmutablemente
       }
     });
 

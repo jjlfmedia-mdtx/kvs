@@ -211,7 +211,7 @@ export default function VerifyPage() {
           <motion.div key="result" className="w-full max-w-5xl relative z-10" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className="glass-card rounded-3xl overflow-hidden shadow-2xl">
               {/* Status banner */}
-              <div className="p-6 flex items-center gap-4 border-b border-[var(--glass-border)]" style={{ background: `color-mix(in srgb, ${overallColor} 12%, transparent)`, borderBottomColor: `color-mix(in srgb, ${overallColor} 30%, transparent)` }}>
+              <div className="p-6 flex items-center gap-4 border-b border-[var(--glass-border)]" data-kvs-verdict={result.overall} style={{ background: `color-mix(in srgb, ${overallColor} 12%, transparent)`, borderBottomColor: `color-mix(in srgb, ${overallColor} 30%, transparent)` }}>
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center border shadow-lg shrink-0" style={{ background: `color-mix(in srgb, ${overallColor} 15%, transparent)`, borderColor: overallColor, color: overallColor }}>
                   <OverallIcon size={28} />
                 </div>
@@ -250,11 +250,11 @@ export default function VerifyPage() {
                   {result.db_record ? (
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="bg-black/60 rounded-2xl p-4 border border-[var(--accent-cyan)]/30 shadow-cyan-glow col-span-1 sm:col-span-2">
+                        <div className="bg-black/60 rounded-2xl p-4 border border-[var(--accent-cyan)]/30 shadow-cyan-glow col-span-1 sm:col-span-2" data-kvs-id={result.db_record.kvs_id}>
                           <p className="text-[9px] text-[var(--accent-cyan)] font-mono tracking-widest mb-1.5">KVS REGISTRY ID</p>
                           <p className="font-mono text-lg font-bold text-white tracking-wider">{result.db_record.kvs_id}</p>
                         </div>
-                        <div className="bg-black/60 rounded-2xl p-4 border border-[var(--accent-purple)]/30 col-span-1 sm:col-span-2" style={{ boxShadow: '0 0 20px rgba(157,78,221,0.1)' }}>
+                        <div className="bg-black/60 rounded-2xl p-4 border border-[var(--accent-purple)]/30 col-span-1 sm:col-span-2" data-kvs-fingerprint={result.db_record.kvs_fingerprint} style={{ boxShadow: '0 0 20px rgba(157,78,221,0.1)' }}>
                           <p className="text-[9px] text-[var(--accent-purple)] font-mono tracking-widest mb-1.5">KVS UNIQUE FINGERPRINT</p>
                           <p className="font-mono text-xs font-bold break-all" style={{ color: 'var(--accent-purple)' }}>{result.db_record.kvs_fingerprint || 'KVS-FINGERPRINT-NOT-GENERATED'}</p>
                         </div>

@@ -52,8 +52,8 @@ export default function DownloadPage() {
 
             {/* Download Button */}
             <a 
-              href="/app-release.apk" 
-              download="kvs-versecured-v3.0.apk"
+              href="/kvs-app.apk" 
+              download="kvs-app-v3.0.apk"
               className="inline-flex items-center gap-3 px-8 py-4 bg-[var(--accent-cyan)] text-black font-mono font-bold rounded-[16px] shadow-[0_0_30px_rgba(0,229,255,0.3)] hover:shadow-cyan-glow-intense hover:scale-[1.03] transition-all duration-200"
             >
               <Download size={18} />

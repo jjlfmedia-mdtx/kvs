@@ -1,19 +1,57 @@
-"use client";
-// src/app/components/NavBar.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ShieldCheck, Menu, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { ShieldCheck, Menu, X, LogIn, LogOut, FileImage, ShieldAlert } from "lucide-react";
 
 export default function NavBar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<{ username: string } | null>(null);
 
-  const links = [
+  const checkUser = async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      if (data.authenticated) {
+        setUser(data.user);
+      } else {
+        setUser(null);
+      }
+    } catch {
+      setUser(null);
+    }
+  };
+
+  useEffect(() => {
+    checkUser();
+    // Escuchar el evento de cambio de sesión o de subida para actualizar sesión
+    window.addEventListener("focus", checkUser);
+    return () => window.removeEventListener("focus", checkUser);
+  }, [pathname]);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setUser(null);
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const baseLinks = [
     { href: "/", label: "Authenticate" },
     { href: "/verify", label: "Verify" },
-
+    { href: "/registry/public", label: "Public Registry" },
   ];
+
+  const authLinks = user
+    ? [{ href: "/registry/private", label: "My Protected Images" }]
+    : [];
+
+  const links = [...baseLinks, ...authLinks];
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -54,11 +92,31 @@ export default function NavBar() {
           ))}
         </div>
 
-        {/* CTA Button */}
-        <div className="hidden md:block">
+        {/* Auth CTA & Profile info */}
+        <div className="hidden md:flex items-center gap-4">
+          {user ? (
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs text-[var(--text-secondary)]">
+                Logged: <span className="text-[var(--accent-cyan)] font-bold">@{user.username}</span>
+              </span>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 font-mono text-xs rounded-xl hover:bg-red-500/20 transition cursor-pointer"
+              >
+                <LogOut size={12} /> Exit
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/auth/login"
+              className="flex items-center gap-1.5 px-4 py-2 bg-white/5 border border-white/10 text-white font-mono text-xs rounded-xl hover:bg-white/10 transition"
+            >
+              <LogIn size={12} /> Sign In
+            </Link>
+          )}
           <Link
             href="/"
-            className="px-5 py-2.5 bg-[var(--accent-cyan)] text-black font-mono text-sm font-bold rounded-[14px] shadow-[0_0_20px_rgba(0,229,255,0.35)] hover:shadow-cyan-glow-intense hover:scale-105 transition-all duration-200"
+            className="px-5 py-2 bg-[var(--accent-cyan)] text-black font-mono text-xs font-bold rounded-[12px] shadow-[0_0_20px_rgba(0,229,255,0.25)] hover:shadow-cyan-glow-intense hover:scale-105 transition-all duration-200"
           >
             Protect Image
           </Link>
@@ -90,13 +148,37 @@ export default function NavBar() {
               {label}
             </Link>
           ))}
-          <Link
-            href="/"
-            onClick={() => setMobileOpen(false)}
-            className="mt-2 text-center py-3 bg-[var(--accent-cyan)] text-black font-mono font-bold rounded-[14px] text-sm"
-          >
-            Protect Image
-          </Link>
+          
+          <div className="border-t border-white/5 pt-3 flex flex-col gap-3">
+            {user ? (
+              <div className="flex flex-col gap-2">
+                <span className="font-mono text-xs text-[var(--text-secondary)]">
+                  Logged: <span className="text-[var(--accent-cyan)]">@{user.username}</span>
+                </span>
+                <button
+                  onClick={() => { setMobileOpen(false); handleLogout(); }}
+                  className="flex items-center justify-center gap-1.5 py-2.5 bg-red-500/10 border border-red-500/30 text-red-400 font-mono text-xs rounded-xl hover:bg-red-500/20 transition w-full"
+                >
+                  <LogOut size={12} /> Exit
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/auth/login"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center justify-center gap-1.5 py-2.5 bg-white/5 border border-white/10 text-white font-mono text-xs rounded-xl w-full"
+              >
+                <LogIn size={12} /> Sign In
+              </Link>
+            )}
+            <Link
+              href="/"
+              onClick={() => setMobileOpen(false)}
+              className="text-center py-2.5 bg-[var(--accent-cyan)] text-black font-mono font-bold rounded-[12px] text-xs"
+            >
+              Protect Image
+            </Link>
+          </div>
         </div>
       )}
     </>
