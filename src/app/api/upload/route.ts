@@ -60,7 +60,24 @@ export async function POST(req: Request) {
     // ── Generate unique random KVS-ID ──────────────────────────────────────
     const kvsId = await generateUniqueRandomId();
     const year = new Date().getFullYear();
-    const ownerName = 'Kyllerium System';
+
+    // ── Get authenticated user from session cookie for Ownership ──
+    let authUserId: string | null = null;
+    let ownerName = 'Kyllerium Guest';
+    try {
+      const cookieStore = await cookies();
+      const token = cookieStore.get('kvs_session')?.value;
+      if (token) {
+        const payload = await verifyJWT(token);
+        if (payload) {
+          authUserId = payload.userId;
+          ownerName = payload.username; // Usar su nombre de usuario real
+        }
+      }
+    } catch (cookieErr) {
+      console.warn('[KVS Upload] Failed to read session cookie:', cookieErr);
+    }
+
     const layers: Record<string, boolean> = {};
 
     let processedBuffer: Buffer = buffer;
@@ -115,21 +132,6 @@ export async function POST(req: Request) {
     const ext = `.${actualType.ext}`;
     const filename = `KVS-${kvsId}${ext}`;
     const filepath = await saveImageFile(processedBuffer as any, filename, actualType.mime);
-
-    // ── Get authenticated user from session cookie ────────────────────
-    let authUserId: string | null = null;
-    try {
-      const cookieStore = await cookies();
-      const token = cookieStore.get('kvs_session')?.value;
-      if (token) {
-        const payload = await verifyJWT(token);
-        if (payload) {
-          authUserId = payload.userId;
-        }
-      }
-    } catch (cookieErr) {
-      console.warn('[KVS Upload] Failed to read session cookie:', cookieErr);
-    }
 
     // ── Save to DB ─────────────────────────────────────────────────────────
     const imageRecord = await prisma.image.create({
