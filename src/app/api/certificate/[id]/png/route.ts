@@ -1,5 +1,5 @@
 // src/app/api/certificate/[id]/png/route.ts
-// Generates a PNG image of the certificate using next/og ImageResponse
+// Generates a PNG image of the official unified certificate using next/og ImageResponse
 import { ImageResponse } from 'next/og';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -7,10 +7,22 @@ import React from 'react';
 
 export const runtime = 'nodejs';
 
-function buildElement(kvsData: any, ownerData: any, isCustom: boolean): React.ReactElement {
+function buildElement(kvsData: any): React.ReactElement {
   const kvsId = kvsData.kvs_id || '';
   const verifyUrl = `kyllerium.com/verify/${kvsId}`;
   const ts = new Date(kvsData.upload_date || Date.now()).toISOString();
+
+  // Parse extended metadata from metadata_json
+  let meta: any = {};
+  try {
+    meta = JSON.parse(kvsData.metadata_json || '{}');
+  } catch { /* ignore */ }
+
+  const assetTitle = meta.title || 'Imagen Protegida KVS';
+  const org = kvsData.owner_org || meta.organization || 'Sin Organización';
+  const role = kvsData.owner_role || meta.role || 'Productor de Contenido';
+  const expiration = meta.expirationDate || 'N/A';
+  const usage = meta.usageDescription || 'Uso no restringido';
 
   let layers: any = { dct: true, lsb: true, exif: true, c2pa: true };
   try {
@@ -21,13 +33,15 @@ function buildElement(kvsData: any, ownerData: any, isCustom: boolean): React.Re
   const rows: { label: string; value: string; color: string }[] = [
     { label: 'KVS REGISTRY ID', value: kvsId, color: '#00E5FF' },
     { label: 'KVS FINGERPRINT', value: (kvsData.kvs_fingerprint || 'KVS-FP-NOT-GENERATED').substring(0, 52), color: '#9D4EDD' },
-    { label: 'REGISTERED OWNER', value: ownerData?.name || 'Kyllerium System', color: '#FFFFFF' },
+    { label: 'SHA-256 HASH', value: (kvsData.hash_sha256 || 'Pending').substring(0, 52), color: '#CBD5E1' },
+    { label: 'ASSET TITLE', value: assetTitle, color: '#FFFFFF' },
+    { label: 'REGISTERED OWNER', value: kvsData.owner_name || 'Kyllerium System', color: '#FFFFFF' },
+    { label: 'ORGANIZATION', value: org, color: '#FFFFFF' },
+    { label: 'ROLE / TITLE', value: role, color: '#FFFFFF' },
+    { label: 'VALID UNTIL', value: expiration, color: '#EF4444' },
+    { label: 'AUTHORIZED USAGE', value: usage, color: '#10B981' },
+    { label: 'TIMESTAMP (UTC)', value: ts, color: '#94A3B8' },
   ];
-  if (ownerData?.organization) rows.push({ label: 'ORGANIZATION', value: ownerData.organization, color: '#FFFFFF' });
-  if (ownerData?.role) rows.push({ label: 'ROLE / TITLE', value: ownerData.role, color: '#FFFFFF' });
-  if (isCustom && ownerData?.expirationDate) rows.push({ label: 'VALID UNTIL', value: ownerData.expirationDate, color: '#EF4444' });
-  if (isCustom && ownerData?.usageDescription) rows.push({ label: 'AUTHORIZED USAGE', value: ownerData.usageDescription, color: '#10B981' });
-  rows.push({ label: 'TIMESTAMP (UTC)', value: ts, color: '#94A3B8' });
 
   const layerDefs = [
     { name: 'DCT', active: !!layers.dct, desc: 'Spread-spectrum watermark' },
@@ -69,7 +83,7 @@ function buildElement(kvsData: any, ownerData: any, isCustom: boolean): React.Re
         )
       ),
       React.createElement('div', { style: { color: '#9D4EDD', fontSize: 12, fontFamily: 'monospace', letterSpacing: 2, marginBottom: 16 } },
-        isCustom ? '*  CERTIFICADO DE AUTENTICIDAD PERSONALIZADO  *' : '*  CERTIFICADO OFICIAL DEL SISTEMA  *'
+        '*  CERTIFICADO OFICIAL DEL SISTEMA  *'
       ),
 
       // Divider
@@ -79,7 +93,7 @@ function buildElement(kvsData: any, ownerData: any, isCustom: boolean): React.Re
       React.createElement('div', {
         style: {
           display: 'flex', alignItems: 'center', gap: 12, background: '#051409',
-          border: '1.5px solid #10B981', borderRadius: 8, padding: '12px 20px', marginBottom: 24
+          border: '1.5px solid #10B981', borderRadius: 8, padding: '12px 20px', marginBottom: 20
         }
       },
         React.createElement('div', { style: { width: 12, height: 12, borderRadius: '50%', background: '#10B981' } }),
@@ -94,7 +108,7 @@ function buildElement(kvsData: any, ownerData: any, isCustom: boolean): React.Re
         React.createElement('div', { style: { color: '#E2E8F0', fontSize: 14, fontWeight: 700, letterSpacing: 1 } }, 'IMAGE METADATA & REGISTRY IDENTIFIERS')
       ),
       React.createElement('div', { style: { height: 1, background: '#1E2D4A', marginBottom: 12 } }),
-      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 } },
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 20 } },
         ...rows.map((r, i) =>
           React.createElement('div', { key: i, style: { display: 'flex', gap: 0 } },
             React.createElement('div', { style: { color: '#64748B', fontSize: 11, fontFamily: 'monospace', width: 230 } }, r.label),
@@ -149,24 +163,12 @@ function buildElement(kvsData: any, ownerData: any, isCustom: boolean): React.Re
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const url = new URL(req.url);
-    const type = url.searchParams.get('type') || 'official';
 
     const record = await prisma.image.findUnique({ where: { kvs_id: id } });
     if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    let ownerData: any;
-    if (type === 'custom' && record.custom_certificate) {
-      try { ownerData = JSON.parse(record.custom_certificate); } catch { /* ignore */ }
-    }
-    if (!ownerData) {
-      ownerData = { name: record.owner_name, organization: record.owner_org, role: record.owner_role };
-    }
-
-    const isCustom = type === 'custom';
-
     const imageResponse = new ImageResponse(
-      buildElement(record, ownerData, isCustom),
+      buildElement(record),
       { width: 1240, height: 1754 }
     );
 
@@ -174,7 +176,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return new Response(bytes, {
       headers: {
         'Content-Type': 'image/png',
-        'Content-Disposition': `attachment; filename="KVS-${isCustom ? 'Custom' : 'Official'}-${id}.png"`,
+        'Content-Disposition': `attachment; filename="KVS-Official-${id}.png"`,
         'Content-Length': String(bytes.byteLength),
       }
     });

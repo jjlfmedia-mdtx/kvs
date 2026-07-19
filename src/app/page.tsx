@@ -27,10 +27,7 @@ export default function Home() {
   const [status, setStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [progressMsg, setProgressMsg] = useState('');
   const [result, setResult] = useState<any>(null);
-  const [showCustomForm, setShowCustomForm] = useState(false);
   const [customData, setCustomData] = useState({ name: '', organization: '', role: '', expirationDate: '', usageDescription: '' });
-  const [customSaved, setCustomSaved] = useState(false);
-  const [savingCustom, setSavingCustom] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   
@@ -87,7 +84,6 @@ export default function Home() {
       setPreview(URL.createObjectURL(selected));
       setStatus('idle');
       setResult(null);
-      setCustomSaved(false);
     }
   }, []);
 
@@ -164,6 +160,11 @@ export default function Home() {
 
     const formData = new FormData();
     formData.append('file', finalFile);
+    formData.append('title', customData.name || 'Imagen Protegida KVS'); // Usamos customData.name como título del asset
+    formData.append('organization', customData.organization || 'Kyllerium System');
+    formData.append('role', customData.role || 'Productor de Contenido');
+    formData.append('expirationDate', customData.expirationDate || '');
+    formData.append('usageDescription', customData.usageDescription || 'Uso no restringido');
 
     steps.forEach((s, i) => {
       if (i > 0) setTimeout(() => setProgressMsg(s), i * 800);
@@ -219,26 +220,6 @@ export default function Home() {
     }
   };
 
-  const saveCustomCertificate = async () => {
-    if (!result?.kvs_id) return;
-    setSavingCustom(true);
-    try {
-      const res = await fetch(`/api/certificate/${result.kvs_id}/custom`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(customData)
-      });
-      if (res.ok) {
-        setCustomSaved(true);
-        setShowCustomForm(false);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSavingCustom(false);
-    }
-  };
-
   const triggerDownload = (url: string, filename: string) => {
     const a = document.createElement('a');
     a.href = url;
@@ -246,25 +227,13 @@ export default function Home() {
     a.click();
   };
 
-  const handleDownloadChoice = (choice: 'official' | 'custom' | 'combined' | 'both' | 'png-official' | 'png-custom' | 'png-both') => {
+  const handleDownloadChoice = (choice: 'official' | 'png-official') => {
     if (!result?.kvs_id) return;
     const id = result.kvs_id;
     if (choice === 'official') {
       triggerDownload(`/api/certificate/${id}`, `KVS-Official-${id}.pdf`);
-    } else if (choice === 'custom') {
-      triggerDownload(`/api/certificate/${id}/custom`, `KVS-Custom-${id}.pdf`);
-    } else if (choice === 'combined') {
-      triggerDownload(`/api/certificate/${id}/combined`, `KVS-Combined-${id}.pdf`);
-    } else if (choice === 'both') {
-      triggerDownload(`/api/certificate/${id}`, `KVS-Official-${id}.pdf`);
-      setTimeout(() => triggerDownload(`/api/certificate/${id}/custom`, `KVS-Custom-${id}.pdf`), 400);
     } else if (choice === 'png-official') {
-      triggerDownload(`/api/certificate/${id}/png?type=official`, `KVS-Official-${id}.png`);
-    } else if (choice === 'png-custom') {
-      triggerDownload(`/api/certificate/${id}/png?type=custom`, `KVS-Custom-${id}.png`);
-    } else if (choice === 'png-both') {
-      triggerDownload(`/api/certificate/${id}/png?type=official`, `KVS-Official-${id}.png`);
-      setTimeout(() => triggerDownload(`/api/certificate/${id}/png?type=custom`, `KVS-Custom-${id}.png`), 400);
+      triggerDownload(`/api/certificate/${id}/png`, `KVS-Official-${id}.png`);
     }
   };
 
@@ -326,8 +295,77 @@ export default function Home() {
             </div>
 
             {preview && (
+              <div className="mt-8 bg-black/60 rounded-3xl p-6 border border-[var(--glass-border)] shadow-xl text-left max-w-2xl mx-auto mb-6">
+                <h3 className="font-bold text-base mb-4 flex items-center gap-2 text-white">
+                  <Sparkles size={16} className="text-[var(--accent-cyan)]" /> Metadatos Obligatorios del Registro
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="col-span-1 sm:col-span-2">
+                    <label className="block text-[10px] font-mono text-[var(--accent-cyan)] tracking-widest mb-1.5">TÍTULO DEL ASSET *</label>
+                    <input 
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-3 text-sm focus:border-[var(--accent-cyan)] outline-none transition text-white" 
+                      placeholder="Ej. Fotografía de Paisaje Kyllerium" 
+                      value={customData.name} 
+                      onChange={e => setCustomData(p => ({ ...p, name: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono text-[var(--text-secondary)] tracking-widest mb-1.5">ORGANIZACIÓN / EMPRESA</label>
+                    <input 
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-3 text-sm focus:border-[var(--accent-cyan)] outline-none transition text-white" 
+                      placeholder="Ej. Kyllerium Corporation" 
+                      value={customData.organization} 
+                      onChange={e => setCustomData(p => ({ ...p, organization: e.target.value }))} 
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="block text-[10px] font-mono text-[var(--text-secondary)] tracking-widest">ROL / CARGO</label>
+                      <button 
+                        onClick={enhanceWithAI} 
+                        disabled={enhancing || !customData.role} 
+                        className="text-[9px] font-mono text-[var(--accent-purple)] hover:underline flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        {enhancing ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />} Mejorar con IA
+                      </button>
+                    </div>
+                    <input 
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-3 text-sm focus:border-[var(--accent-purple)] outline-none transition text-white" 
+                      placeholder="Ej. Director Creativo" 
+                      value={customData.role} 
+                      onChange={e => setCustomData(p => ({ ...p, role: e.target.value }))} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono text-red-400 tracking-widest mb-1.5">FECHA DE VENCIMIENTO *</label>
+                    <input 
+                      className="w-full bg-black/40 border border-red-500/20 rounded-2xl p-3 text-sm focus:border-red-400 outline-none transition text-white" 
+                      placeholder="Ej. 31/12/2030 (Vacío = 10 años)" 
+                      value={customData.expirationDate} 
+                      onChange={e => setCustomData(p => ({ ...p, expirationDate: e.target.value }))} 
+                    />
+                  </div>
+                  <div className="col-span-1 sm:col-span-2">
+                    <label className="block text-[10px] font-mono text-[var(--text-secondary)] tracking-widest mb-1.5">DESCRIPCIÓN DE USO AUTORIZADO *</label>
+                    <input 
+                      className="w-full bg-black/40 border border-white/10 rounded-2xl p-3 text-sm focus:border-[var(--accent-cyan)] outline-none transition text-white" 
+                      placeholder="Ej. Uso periodístico exclusivo y prensa autorizada" 
+                      value={customData.usageDescription} 
+                      onChange={e => setCustomData(p => ({ ...p, usageDescription: e.target.value }))} 
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {preview && (
               <div className="mt-6 flex justify-center">
-                <button onClick={handleUpload} className="bg-[var(--accent-cyan)] text-black font-mono font-bold py-4 px-14 rounded-[18px] hover:shadow-cyan-glow-intense hover:scale-105 active:scale-95 transition-all duration-200 tracking-widest text-base">
+                <button 
+                  onClick={handleUpload} 
+                  disabled={!customData.name}
+                  className="bg-[var(--accent-cyan)] text-black font-mono font-bold py-4 px-14 rounded-[18px] hover:shadow-cyan-glow-intense hover:scale-105 active:scale-95 transition-all duration-200 tracking-widest text-base disabled:opacity-50"
+                >
                   PROTEGER IMAGEN
                 </button>
               </div>
@@ -462,69 +500,22 @@ export default function Home() {
 
               {/* Certificate section */}
               <div className="border-t border-[var(--glass-border)] p-6">
-                {!showCustomForm ? (
-                  <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                    <div className="flex-grow">
-                      <p className="font-semibold text-sm mb-0.5">Certificados de Autenticidad</p>
-                      <p className="text-xs text-[var(--text-secondary)]">Descarga el certificado oficial o agrega tus datos personales para uno personalizado.</p>
-                    </div>
-                    <div className="flex gap-3 shrink-0">
-                      <button onClick={() => setShowDownloadModal(true)} className="flex items-center gap-2 px-5 py-3 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition text-sm font-bold">
-                        <FileText size={16} /> Descargar PDFs
-                      </button>
-                      <button onClick={() => setShowCustomForm(true)} className="flex items-center gap-2 px-5 py-3 bg-[var(--accent-purple)]/15 border border-[var(--accent-purple)]/40 text-[var(--accent-purple)] rounded-2xl hover:bg-[var(--accent-purple)]/25 transition text-sm font-bold">
-                        <Sparkles size={16} /> Certificado Personalizado
-                      </button>
-                    </div>
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                  <div className="flex-grow">
+                    <p className="font-semibold text-sm mb-0.5">Certificado de Autenticidad KVS Oficial</p>
+                    <p className="text-xs text-[var(--text-secondary)]">Descarga el certificado emitido por el sistema con todos tus metadatos y firmas criptográficas inyectadas.</p>
                   </div>
-                ) : (
-                  <div className="relative">
-                    <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[var(--accent-cyan)] to-[var(--accent-purple)] rounded-full" />
-                    <div className="pl-5">
-                      <h3 className="font-bold text-base mb-4 flex items-center gap-2">
-                        <Sparkles size={16} className="text-[var(--accent-purple)]" /> Datos del Certificado Personalizado
-                      </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                        <input className="bg-black/60 border border-white/10 rounded-2xl p-3 text-sm focus:border-[var(--accent-cyan)] outline-none transition text-white placeholder-white/30 col-span-1 sm:col-span-2" placeholder="Nombre completo / Propietario *" value={customData.name} onChange={e => setCustomData(p => ({ ...p, name: e.target.value }))} />
-                        <input className="bg-black/60 border border-white/10 rounded-2xl p-3 text-sm focus:border-[var(--accent-cyan)] outline-none transition text-white placeholder-white/30" placeholder="Organización (opcional)" value={customData.organization} onChange={e => setCustomData(p => ({ ...p, organization: e.target.value }))} />
-                        <div className="flex gap-2">
-                          <input className="flex-grow bg-black/60 border border-white/10 rounded-2xl p-3 text-sm focus:border-[var(--accent-purple)] outline-none transition text-white placeholder-white/30" placeholder="Rol / Descripción" value={customData.role} onChange={e => setCustomData(p => ({ ...p, role: e.target.value }))} />
-                          <button onClick={enhanceWithAI} disabled={enhancing} title="Mejorar con IA" className="bg-[var(--accent-purple)]/20 border border-[var(--accent-purple)]/40 text-[var(--accent-purple)] px-3 rounded-2xl hover:bg-[var(--accent-purple)]/40 transition shrink-0">
-                            {enhancing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                          </button>
-                        </div>
-                        <input className="bg-black/60 border border-white/10 rounded-2xl p-3 text-sm focus:border-[var(--accent-cyan)] outline-none transition text-white placeholder-white/30" placeholder="Fecha de Vencimiento (ej. 31/12/2030 o Sin Vencimiento)" value={customData.expirationDate} onChange={e => setCustomData(p => ({ ...p, expirationDate: e.target.value }))} />
-                        <input className="bg-black/60 border border-white/10 rounded-2xl p-3 text-sm focus:border-[var(--accent-cyan)] outline-none transition text-white placeholder-white/30 col-span-1 sm:col-span-2" placeholder="Descripción de Uso Autorizado (ej. Uso editorial exclusivo y prensa)" value={customData.usageDescription} onChange={e => setCustomData(p => ({ ...p, usageDescription: e.target.value }))} />
-                      </div>
-
-                      {customSaved && (
-                        <div className="mb-4 p-3 bg-[#10B981]/10 border border-[#10B981]/30 rounded-2xl text-[#10B981] text-sm font-mono flex items-center gap-2">
-                          <CheckCircle size={16} /> Certificado personalizado guardado en base de datos.
-                        </div>
-                      )}
-
-                      <div className="flex flex-wrap gap-3">
-                        <button onClick={saveCustomCertificate} disabled={savingCustom || !customData.name} className="flex items-center gap-2 px-6 py-3 bg-[var(--accent-cyan)] text-black font-mono font-bold rounded-2xl hover:shadow-cyan-glow transition disabled:opacity-50 text-sm">
-                          <span className="flex items-center gap-2">
-                            {savingCustom ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                            <span>{savingCustom ? 'IMPLEMENTANDO...' : 'GUARDAR CERTIFICADO'}</span>
-                          </span>
-                        </button>
-                        <button onClick={() => setShowDownloadModal(true)} disabled={!customSaved} className="flex items-center gap-2 px-6 py-3 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition disabled:opacity-40 text-sm font-bold">
-                          <FileText size={16} /> Descargar PDFs
-                        </button>
-                        <button onClick={() => setShowCustomForm(false)} className="flex items-center gap-2 px-5 py-3 bg-transparent border border-white/10 rounded-2xl hover:bg-white/5 transition text-sm">
-                          <X size={16} /> Cancelar
-                        </button>
-                      </div>
-                    </div>
+                  <div className="flex gap-3 shrink-0">
+                    <button onClick={() => setShowDownloadModal(true)} className="flex items-center gap-2 px-5 py-3 bg-[var(--accent-cyan)] text-black font-mono text-sm font-bold rounded-2xl hover:shadow-cyan-glow transition">
+                      <FileText size={16} /> DESCARGAR CERTIFICADOS
+                    </button>
                   </div>
-                )}
+                </div>
               </div>
             </div>
 
             <div className="text-center">
-              <button onClick={() => { setFile(null); setPreview(null); setStatus('idle'); setResult(null); setCustomSaved(false); setShowCustomForm(false); setCustomData({ name: '', organization: '', role: '', expirationDate: '', usageDescription: '' }); }} className="text-sm font-mono text-[var(--text-secondary)] hover:text-[var(--accent-cyan)] transition underline-offset-4 underline decoration-white/10">
+              <button onClick={() => { setFile(null); setPreview(null); setStatus('idle'); setResult(null); setCustomData({ name: '', organization: '', role: '', expirationDate: '', usageDescription: '' }); }} className="text-sm font-mono text-[var(--text-secondary)] hover:text-[var(--accent-cyan)] transition underline-offset-4 underline decoration-white/10">
                 [ PROTEGER OTRO ASSET ]
               </button>
             </div>
@@ -552,8 +543,8 @@ export default function Home() {
                 <div className="w-12 h-12 rounded-xl bg-[var(--accent-cyan)]/10 border border-[var(--accent-cyan)]/30 flex items-center justify-center mx-auto mb-4 text-[var(--accent-cyan)]">
                   <FileText size={24} />
                 </div>
-                <h3 className="text-xl font-bold">Opciones de Descarga</h3>
-                <p className="text-xs text-[var(--text-secondary)] mt-1">Selecciona el formato para exportar tus registros de seguridad KVS.</p>
+                <h3 className="text-xl font-bold">Certificado Oficial KVS</h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-1">Exporta el certificado oficial unificado con todos tus metadatos, firmas criptográficas y huella de autoría.</p>
               </div>
 
               <div className="flex flex-col gap-2.5">
@@ -565,45 +556,10 @@ export default function Home() {
                   className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-[var(--accent-cyan)]/10 hover:border-[var(--accent-cyan)]/30 transition flex justify-between items-center group"
                 >
                   <div>
-                    <p className="text-sm font-bold group-hover:text-[var(--accent-cyan)] transition">Certificado Oficial (PDF)</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado del sistema con firma criptográfica KVS.</p>
+                    <p className="text-sm font-bold group-hover:text-[var(--accent-cyan)] transition">Descargar Certificado Oficial (PDF)</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado del sistema firmado digitalmente con tus metadatos.</p>
                   </div>
                   <Download size={16} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-cyan)] transition" />
-                </button>
-
-                <button
-                  onClick={() => { handleDownloadChoice('custom'); setShowDownloadModal(false); }}
-                  disabled={!customSaved}
-                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-[var(--accent-purple)]/10 hover:border-[var(--accent-purple)]/30 disabled:opacity-35 transition flex justify-between items-center group"
-                >
-                  <div>
-                    <p className="text-sm font-bold group-hover:text-[var(--accent-purple)] transition">Certificado Personalizado (PDF)</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">PDF con tus datos de propietario y uso autorizados.</p>
-                  </div>
-                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-purple)] transition" />
-                </button>
-
-                <button
-                  onClick={() => { handleDownloadChoice('combined'); setShowDownloadModal(false); }}
-                  className="w-full text-left p-4 bg-gradient-to-r from-[var(--accent-cyan)]/5 to-[var(--accent-purple)]/5 border border-white/10 rounded-[18px] hover:from-[var(--accent-cyan)]/10 hover:to-[var(--accent-purple)]/10 hover:border-[var(--accent-cyan)]/40 transition flex justify-between items-center group"
-                >
-                  <div>
-                    <p className="text-sm font-bold">PDF Combinado (2 páginas)</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Un solo documento con ambos certificados oficial y personalizado.</p>
-                  </div>
-                  <Download size={16} className="text-[var(--accent-cyan)]" />
-                </button>
-
-                <button
-                  onClick={() => { handleDownloadChoice('both'); setShowDownloadModal(false); }}
-                  disabled={!customSaved}
-                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-white/10 disabled:opacity-35 transition flex justify-between items-center group"
-                >
-                  <div>
-                    <p className="text-sm font-bold">Ambos PDFs (separados)</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Descarga simultánea de los dos certificados PDF individuales.</p>
-                  </div>
-                  <Download size={16} className="text-[var(--text-secondary)]" />
                 </button>
 
                 {/* PNG Section */}
@@ -614,34 +570,10 @@ export default function Home() {
                   className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-emerald-500/10 hover:border-emerald-500/30 transition flex justify-between items-center group"
                 >
                   <div>
-                    <p className="text-sm font-bold group-hover:text-emerald-400 transition">Imagen PNG – Oficial</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado oficial exportado como imagen PNG de alta resolución.</p>
+                    <p className="text-sm font-bold group-hover:text-emerald-400 transition">Descargar Certificado Oficial (PNG)</p>
+                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado exportado como imagen de alta resolución.</p>
                   </div>
                   <Download size={16} className="text-[var(--text-secondary)] group-hover:text-emerald-400 transition" />
-                </button>
-
-                <button
-                  onClick={() => { handleDownloadChoice('png-custom'); setShowDownloadModal(false); }}
-                  disabled={!customSaved}
-                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-emerald-500/10 hover:border-emerald-500/30 disabled:opacity-35 transition flex justify-between items-center group"
-                >
-                  <div>
-                    <p className="text-sm font-bold group-hover:text-emerald-400 transition">Imagen PNG – Personalizado</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Certificado personalizado exportado como PNG de alta resolución.</p>
-                  </div>
-                  <Download size={16} className="text-[var(--text-secondary)] group-hover:text-emerald-400 transition" />
-                </button>
-
-                <button
-                  onClick={() => { handleDownloadChoice('png-both'); setShowDownloadModal(false); }}
-                  disabled={!customSaved}
-                  className="w-full text-left p-4 bg-white/5 border border-white/10 rounded-[18px] hover:bg-white/10 disabled:opacity-35 transition flex justify-between items-center group"
-                >
-                  <div>
-                    <p className="text-sm font-bold">Ambas imágenes PNG</p>
-                    <p className="text-[10px] text-[var(--text-secondary)] mt-0.5">Descarga simultánea de los dos certificados como PNG.</p>
-                  </div>
-                  <Download size={16} className="text-[var(--text-secondary)]" />
                 </button>
               </div>
             </motion.div>

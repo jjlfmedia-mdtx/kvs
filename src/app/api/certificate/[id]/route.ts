@@ -9,13 +9,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const record = await prisma.image.findUnique({ where: { kvs_id: id } });
     if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const ownerData = {
-      name: record.owner_name,
-      organization: record.owner_org,
-      role: record.owner_role
-    };
-
-    const pdfBuffer = await generateCertificate(record, ownerData, false);
+    const pdfBuffer = await generateCertificate(record, {}, false);
 
     return new Response(pdfBuffer as any, {
       headers: {

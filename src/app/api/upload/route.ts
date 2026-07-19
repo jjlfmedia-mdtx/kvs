@@ -51,6 +51,21 @@ export async function POST(req: Request) {
     const file = formData.get('file') as File;
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
 
+    // Campos del formulario
+    const title = formData.get('title') as string || 'Imagen Protegida KVS';
+    const organization = formData.get('organization') as string || 'Sin Organización';
+    const role = formData.get('role') as string || 'Productor de Contenido';
+    let expirationDate = formData.get('expirationDate') as string || '';
+    const usageDescription = formData.get('usageDescription') as string || 'Uso no restringido';
+
+    // Normalización de expiración según los requisitos del usuario
+    if (!expirationDate || expirationDate.trim().toLowerCase() === 'sin vencimiento') {
+      // Si está vacío o es 'Sin Vencimiento', asignamos por defecto 10 años en el futuro en formato fecha para que sea válido
+      const future = new Date();
+      future.setFullYear(future.getFullYear() + 10);
+      expirationDate = future.toLocaleDateString('es-MX');
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -78,6 +93,9 @@ export async function POST(req: Request) {
       console.warn('[KVS Upload] Failed to read session cookie:', cookieErr);
     }
 
+    // Propietario oficial firmado con Kyllerium System al lado como Sistema Certificador
+    const officialOwner = `${ownerName} (Certificado por Kyllerium System)`;
+
     const layers: Record<string, boolean> = {};
 
     let processedBuffer: Buffer = buffer;
@@ -88,8 +106,8 @@ export async function POST(req: Request) {
     try {
       const watermarkResult = await embedWatermarkLayers(
         processedBuffer,
-        { kvs_id: kvsId, owner: ownerName },
-        { kvs_id: kvsId, owner: ownerName, ts: Date.now() }
+        { kvs_id: kvsId, owner: officialOwner },
+        { kvs_id: kvsId, owner: officialOwner, organization, role, ts: Date.now() }
       );
       processedBuffer = watermarkResult.buffer;
       layers.dct = watermarkResult.layers.dct;
@@ -103,7 +121,7 @@ export async function POST(req: Request) {
     // ── Layer 3: EXIF/XMP metadata (JPEG), LSB fallback for PNG/WEBP ──────
     try {
       const fmt = type.mime.split('/')[1] as 'jpeg' | 'png' | 'webp';
-      processedBuffer = await embedMetadata(processedBuffer as any, { kvsId, ownerName, year }, fmt) as any;
+      processedBuffer = await embedMetadata(processedBuffer as any, { kvsId, ownerName: officialOwner, year }, fmt) as any;
       layers.exif = type.mime === 'image/jpeg';
     } catch (e: any) { console.warn('[EXIF]', e?.message); layers.exif = false; }
 
@@ -112,7 +130,12 @@ export async function POST(req: Request) {
     // encoding steps can change the format (e.g. PNG→JPEG after canvas compression),
     // so using the original type.mime may cause a fatal mimeType mismatch in c2pa-node.
     const actualType = getMimeType(processedBuffer as any) ?? type;
-    const c2paResult = await signWithC2PA(processedBuffer as any, actualType.mime, { kvs_id: kvsId }, { name: ownerName });
+    const c2paResult = await signWithC2PA(
+      processedBuffer as any, 
+      actualType.mime, 
+      { kvs_id: kvsId }, 
+      { name: officialOwner, organization, role, expirationDate, usageDescription, title }
+    );
     processedBuffer = c2paResult.buffer as any;
     layers.c2pa = c2paResult.injected;
 
@@ -125,7 +148,6 @@ export async function POST(req: Request) {
     // ── KVS Fingerprint (unique cryptographic brand) ───────────────────────
     const kvsFingerprint = generateKVSFingerprint(finalHash, kvsId);
 
-    // ── Save image (dynamic hybrid storage: Supabase or Disk) ───────────────
     // ── Save image (dynamic hybrid storage: Supabase or Disk) ───────────────
     const originalName = sanitize(file.name);
     // Use the actual final format extension (buffer may have been re-encoded)
@@ -143,9 +165,20 @@ export async function POST(req: Request) {
         filename,
         filepath,
         watermark_data: JSON.stringify({ kvs_id: kvsId, layers }),
-        metadata_json: JSON.stringify({ type: type.mime, layers, c2pa: c2paResult.manifestSummary }),
+        metadata_json: JSON.stringify({ 
+          type: type.mime, 
+          layers, 
+          c2pa: c2paResult.manifestSummary,
+          title,
+          organization,
+          role,
+          expirationDate,
+          usageDescription
+        }),
         c2pa_manifest: c2paResult.manifestSummary,
-        owner_name: ownerName,
+        owner_name: officialOwner,
+        owner_org: organization,
+        owner_role: role,
         userId: authUserId // Asociado inmutablemente
       }
     });
@@ -157,7 +190,7 @@ export async function POST(req: Request) {
       hash: finalHash,
       phash: pHash,
       layers,
-      c2pa_manifest: JSON.parse(c2paResult.manifestSummary),
+      c2pa_manifest: JSON.parse(c2paResult.manifestSummary || '{}'),
       format: type.mime,
       filename,
       size_kb: Math.round(processedBuffer.length / 1024),

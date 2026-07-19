@@ -64,7 +64,7 @@ async function drawCertificatePage(doc: any, kvsData: any, ownerData: any, isCus
   // ── Title block ──
   doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(20).text('KYLLERIUM VISUAL SIGNATURE', 92, 55, { characterSpacing: 2 });
   doc.fillColor('#00E5FF').fontSize(8.5).font('Helvetica').text('KYLLERIUM VISUAL SIGNATURE ENGINE  ·  VERSION 3.0', 92, 80, { characterSpacing: 1.5 });
-  doc.fillColor('#9D4EDD').fontSize(8).text(isCustom ? '★  CERTIFICADO DE AUTENTICIDAD PERSONALIZADO  ★' : '★  CERTIFICADO OFICIAL DEL SISTEMA  ★', 92, 93, { characterSpacing: 1 });
+  doc.fillColor('#9D4EDD').fontSize(8).text('★  CERTIFICADO OFICIAL DEL SISTEMA  ★', 92, 93, { characterSpacing: 1 });
 
   // ── Divider after header ──
   doc.lineWidth(0.5).strokeColor('#1E2D4A').moveTo(30, 108).lineTo(W - 30, 108).stroke();
@@ -94,15 +94,28 @@ async function drawCertificatePage(doc: any, kvsData: any, ownerData: any, isCus
     return y + 18;
   };
 
+  // Parsear metadatos extendidos guardados en metadata_json
+  let meta: any = {};
+  try {
+    meta = JSON.parse(kvsData.metadata_json || '{}');
+  } catch {}
+
+  const assetTitle = meta.title || 'Imagen Protegida KVS';
+  const org = kvsData.owner_org || meta.organization || 'Sin Organización';
+  const role = kvsData.owner_role || meta.role || 'Productor de Contenido';
+  const expiration = meta.expirationDate || 'N/A';
+  const usage = meta.usageDescription || 'Uso no restringido';
+
   curY = sectionHeader('IMAGE METADATA & REGISTRY IDENTIFIERS', curY);
   curY = row('KVS Registry ID', kvsId, '#00E5FF', curY);
   curY = row('KVS Fingerprint', kvsData.kvs_fingerprint || 'KVS-FP-NOT-GENERATED', '#9D4EDD', curY);
   curY = row('SHA-256 Hash', kvsData.hash_sha256 || 'Pending', '#CBD5E1', curY);
-  curY = row('Registered Owner', ownerData?.name || 'Kyllerium System', '#FFFFFF', curY);
-  if (ownerData?.organization) curY = row('Organization', ownerData.organization, '#FFFFFF', curY);
-  if (ownerData?.role) curY = row('Role / Title', ownerData.role, '#FFFFFF', curY);
-  if (isCustom && ownerData?.expirationDate) curY = row('Valid Until', ownerData.expirationDate, '#EF4444', curY);
-  if (isCustom && ownerData?.usageDescription) curY = row('Authorized Usage', ownerData.usageDescription, '#10B981', curY);
+  curY = row('Asset Title', assetTitle, '#FFFFFF', curY);
+  curY = row('Registered Owner', kvsData.owner_name || 'Kyllerium System', '#FFFFFF', curY);
+  curY = row('Organization', org, '#FFFFFF', curY);
+  curY = row('Role / Title', role, '#FFFFFF', curY);
+  curY = row('Valid Until', expiration, '#EF4444', curY);
+  curY = row('Authorized Usage', usage, '#10B981', curY);
   curY = row('Timestamp (UTC)', new Date(kvsData.upload_date || Date.now()).toISOString(), '#94A3B8', curY);
 
   curY += 8;

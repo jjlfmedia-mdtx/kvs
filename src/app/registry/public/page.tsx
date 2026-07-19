@@ -89,7 +89,12 @@ export default function PublicRegistryPage() {
                   </span>
                 </div>
 
-                <div className="space-y-3.5 text-xs">
+                <div className="space-y-3 text-xs" data-kvs-verdict={img.verification_status}>
+                  <div>
+                    <span className="text-[9px] font-mono text-[var(--accent-cyan)] block tracking-widest mb-0.5">TÍTULO DEL ASSET</span>
+                    <p className="font-semibold text-white truncate">{img.title}</p>
+                  </div>
+
                   <div>
                     <span className="text-[9px] font-mono text-[var(--text-secondary)] block tracking-widest mb-0.5">PROPIETARIO REGISTRADO</span>
                     <div className="flex items-center gap-1.5 text-white font-medium">
@@ -98,17 +103,36 @@ export default function PublicRegistryPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <span className="text-[9px] font-mono text-[var(--accent-purple)] block tracking-widest mb-0.5">KVS UNIQUE FINGERPRINT</span>
-                    <p className="font-mono text-[10px] break-all text-[var(--accent-purple)] opacity-90">{img.kvs_fingerprint}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[9px] font-mono text-[var(--text-secondary)] block tracking-widest">ORGANIZACIÓN</span>
+                      <p className="text-white font-mono text-[10px] truncate">{img.owner_org}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-mono text-[var(--text-secondary)] block tracking-widest">ROL / CARGO</span>
+                      <p className="text-white font-mono text-[10px] truncate">{img.owner_role}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[9px] font-mono text-[var(--text-secondary)] block tracking-widest">FECHA DE REGISTRO</span>
+                      <p className="text-white font-mono text-[9px]">{new Date(img.upload_date).toLocaleDateString('es-MX')}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-mono text-red-400 block tracking-widest">EXPIRACIÓN</span>
+                      <p className="text-red-400 font-mono text-[9px]">{img.expiration_date}</p>
+                    </div>
                   </div>
 
                   <div>
-                    <span className="text-[9px] font-mono text-[var(--text-secondary)] block tracking-widest mb-0.5">FECHA Y HORA DEL SISTEMA</span>
-                    <div className="flex items-center gap-1.5 text-white font-mono text-[11px]">
-                      <Calendar size={13} className="opacity-40" />
-                      {new Date(img.upload_date).toLocaleString('es-MX')}
-                    </div>
+                    <span className="text-[9px] font-mono text-[var(--text-secondary)] block tracking-widest mb-0.5">USO AUTORIZADO</span>
+                    <p className="text-emerald-400/90 font-mono text-[10px] leading-relaxed line-clamp-2">{img.usage_description}</p>
+                  </div>
+
+                  <div>
+                    <span className="text-[9px] font-mono text-[var(--accent-purple)] block tracking-widest mb-0.5">KVS UNIQUE FINGERPRINT</span>
+                    <p className="font-mono text-[9px] break-all text-[var(--accent-purple)] opacity-90">{img.kvs_fingerprint}</p>
                   </div>
 
                   {img.is_owner && (

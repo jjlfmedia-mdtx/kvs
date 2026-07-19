@@ -29,27 +29,34 @@ export async function GET() {
         owner_org: true,
         owner_role: true,
         userId: true,
-        // Solo enviamos los metadatos y C2PA públicos
+        metadata_json: true,
         verification_status: true,
         revoked: true,
-        // La ruta del archivo y los metadatos completos solo se envían al propietario
       }
     });
 
     // Mapeamos los datos para ocultar información sensible (ruta del archivo) a usuarios terceros
     const sanitizedImages = dbImages.map(img => {
       const isOwner = loggedUserId && img.userId === loggedUserId;
+      let meta: any = {};
+      try {
+        meta = JSON.parse(img.metadata_json || '{}');
+      } catch {}
+
       return {
         id: img.id,
         kvs_id: img.kvs_id,
         kvs_fingerprint: img.kvs_fingerprint,
         upload_date: img.upload_date,
         owner_name: img.owner_name || 'Desconocido',
-        owner_org: img.owner_org || 'Sin Organización',
+        owner_org: img.owner_org || meta.organization || 'Sin Organización',
+        owner_role: img.owner_role || meta.role || 'Productor de Contenido',
+        title: meta.title || 'Imagen Protegida KVS',
+        expiration_date: meta.expirationDate || 'N/A',
+        usage_description: meta.usageDescription || 'Uso no restringido',
         verification_status: img.verification_status,
         revoked: img.revoked,
         is_owner: !!isOwner,
-        // Ocultamos el nombre original de archivo si no es dueño para mayor seguridad
         filename: isOwner ? img.filename : 'Protegida (Oculto en público)',
       };
     });
